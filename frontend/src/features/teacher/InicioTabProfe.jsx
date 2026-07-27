@@ -31,7 +31,7 @@ export default function InicioTabProfe({
   const [clayModal, setClayModal] = useState({ isOpen: false, studentId: null, studentName: null, quantity: '' });
 
   // Filtrar las clases asignadas a este profesor
-  const myClasses = classes.filter(c => c.teacherId === currentUser.id);
+  const myClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
 
   // Calcular la próxima clase
   const nextClassData = useMemo(() => {

@@ -17,7 +17,7 @@ export default function InsumosTabProfe({
   createBake,
   createExtraClay
 }) {
-  const myClasses = classes.filter(c => c.teacherId === currentUser.id);
+  const myClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
 
   // Calcular la próxima clase para autoseleccionar
   const nextClassData = useMemo(() => {

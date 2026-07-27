@@ -26,7 +26,7 @@ export default function ProfeView({ activeTab, setActiveTab }) {
 
   // Determinar sucursales del profe basadas en sus clases
   const myBranches = useMemo(() => {
-    const teacherClasses = classes.filter(c => c.teacherId === currentUser.id);
+    const teacherClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
     return [...new Set(teacherClasses.map(c => c.sucursal).filter(Boolean))];
   }, [classes, currentUser.id]);
 

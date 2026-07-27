@@ -33,7 +33,7 @@ export default function ClasesTabProfe({
   const [pauseModal, setPauseModal] = useState({ isOpen: false, classInfo: null, dateStr: null });
 
   // 1. Filtrar mis clases
-  const myClasses = classes.filter(c => c.teacherId === currentUser.id);
+  const myClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
   const daysMapping = {
     0: 'Domingo',
     1: 'Lunes',

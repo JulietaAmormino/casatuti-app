@@ -5,7 +5,7 @@ export default function AlumnosTabProfe({ currentUser, classes, bookings, studen
   const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Obtener las clases del profesor
-  const myClassesIds = classes.filter(c => c.teacherId === currentUser.id).map(c => c.id);
+  const myClassesIds = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id).map(c => c.id);
 
   // 2. Obtener todos los alumnos que tienen alguna reserva en las clases del profesor
   const myStudentsMap = new Map();
