@@ -236,7 +236,12 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const query = 'SELECT * FROM public.t_usuarios WHERE LOWER(email) = LOWER($1)';
+    const query = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE LOWER(u.email) = LOWER($1)
+    `;
     const { rows } = await db.query(query, [email]);
 
     if (rows.length === 0) {
@@ -262,7 +267,13 @@ app.post('/api/auth/switch-profile', async (req, res) => {
   const { id } = req.body;
   if (!id) return res.status(400).json({ error: 'Falta el id del usuario.' });
   try {
-    const { rows } = await db.query('SELECT * FROM public.t_usuarios WHERE id_usuarios = $1', [id]);
+    const queryStr = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE u.id_usuarios = $1
+    `;
+    const { rows } = await db.query(queryStr, [id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado.' });
     
     const user = rows[0];
@@ -275,7 +286,10 @@ app.post('/api/auth/switch-profile', async (req, res) => {
       'UPDATE public.t_usuarios SET rol = $1, secondary_role = $2 WHERE id_usuarios = $3 RETURNING *',
       [newRole, newSecondaryRole, id]
     );
-    res.json(mapUserToFE(updateRes.rows[0]));
+    const updatedUser = updateRes.rows[0];
+    const { rows: branchRows } = await db.query(`SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') AS sucursal FROM unnest($1::integer[]) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid`, [updatedUser.id_sucursales || []]);
+    updatedUser.sucursal = branchRows[0].sucursal;
+    res.json(mapUserToFE(updatedUser));
   } catch (error) {
     console.error('Error en switch-profile:', error);
     res.status(500).json({ error: 'Error al cambiar de perfil.' });
@@ -290,7 +304,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 
   try {
-    const query = 'SELECT * FROM public.t_usuarios WHERE LOWER(email) = LOWER($1)';
+    const query = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE LOWER(u.email) = LOWER($1)
+    `;
     const { rows } = await db.query(query, [email]);
 
     if (rows.length === 0) {
@@ -325,7 +344,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // Listar todos los usuarios
 app.get('/api/users', async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM public.t_usuarios ORDER BY nombre ASC');
+    const queryStr = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      ORDER BY u.nombre ASC
+    `;
+    const { rows } = await db.query(queryStr);
     res.json(rows.map(mapUserToFE));
   } catch (error) {
     console.error('Error al listar usuarios:', error);
@@ -360,8 +385,10 @@ app.post('/api/users', async (req, res) => {
     // 1. Insertar el usuario en la tabla t_usuarios
     const userInsertQuery = `
       INSERT INTO public.t_usuarios 
-      (nro_documento, clave, email, nombre, apellido, telefono, instagram, fecha_nacimiento, rol, bl_cambio_pass_pte, sucursal, genero) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      (nro_documento, clave, email, nombre, apellido, telefono, instagram, fecha_nacimiento, rol, bl_cambio_pass_pte, id_sucursales, genero) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+        (SELECT array_agg(s.id_sucursal) FROM public.t_sucursales s WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($11, ',')))))), 
+        $12)
       RETURNING *
     `;
     const { rows } = await db.query(userInsertQuery, [
@@ -380,6 +407,8 @@ app.post('/api/users', async (req, res) => {
     ]);
 
     const createdUser = rows[0];
+    const { rows: branchRows } = await db.query(`SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') AS sucursal FROM unnest($1::integer[]) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid`, [createdUser.id_sucursales || []]);
+    createdUser.sucursal = branchRows[0].sucursal;
 
     // 2. Si el rol es ALUMNO, crear su perfil correspondiente en t_cuenta_alumno
     if (role === 'ALUMNO') {
@@ -631,7 +660,7 @@ app.put('/api/users/:id', async (req, res) => {
         instagram = $6,
         fecha_nacimiento = $7,
         avatar_url = $8,
-        sucursal = $9,
+        id_sucursales = (SELECT array_agg(s.id_sucursal) FROM public.t_sucursales s WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($9, ',')))))),
         genero = $10
       WHERE id_usuarios = $11
       RETURNING *

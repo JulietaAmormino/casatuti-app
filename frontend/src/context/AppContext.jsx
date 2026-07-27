@@ -117,9 +117,9 @@ export const AppProvider = ({ children }) => {
         }
       }
 
-      // Comprobar si hay una sesión guardada en sessionStorage o actualizar usuario actual en tiempo real
+      // Comprobar si hay una sesión guardada en localStorage o actualizar usuario actual en tiempo real
       if (!loadedUsers.error) {
-        const savedUserId = sessionStorage.getItem('tuti_session_user_id');
+        const savedUserId = localStorage.getItem('tuti_session_user_id');
         if (savedUserId) {
           const savedUser = loadedUsers.find(u => u.id?.toString() === savedUserId.toString());
           if (savedUser) {
@@ -164,7 +164,7 @@ export const AppProvider = ({ children }) => {
       const user = await mockService.login(email, password);
       setCurrentUser(user);
       setIsAuthenticated(true);
-      sessionStorage.setItem('tuti_session_user_id', user.id);
+      localStorage.setItem('tuti_session_user_id', user.id);
       return user;
     } finally {
       setLoading(false);
@@ -185,7 +185,7 @@ export const AppProvider = ({ children }) => {
   const logoutAction = () => {
     setCurrentUser(null);
     setIsAuthenticated(false);
-    sessionStorage.removeItem('tuti_session_user_id');
+    localStorage.removeItem('tuti_session_user_id');
   };
 
   // Cambiar rol de un usuario (para soporte / configurador)
@@ -245,7 +245,7 @@ export const AppProvider = ({ children }) => {
     if (user) {
       setCurrentUser(user);
       setIsAuthenticated(true);
-      sessionStorage.setItem('tuti_session_user_id', user.id);
+      localStorage.setItem('tuti_session_user_id', user.id);
     }
   };
 
