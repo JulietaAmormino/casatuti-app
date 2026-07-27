@@ -9,11 +9,10 @@ CREATE TABLE public.t_clases_def (
   hora_fin time without time zone NOT NULL,
   cupo_maximo integer NOT NULL,
   id_sucursal uuid,
-  id_profesor uuid,
+  id_profesores uuid[],
   bl_activa boolean DEFAULT true,
   CONSTRAINT t_clases_def_pkey PRIMARY KEY (id),
-  CONSTRAINT t_clases_def_id_sucursal_fkey FOREIGN KEY (id_sucursal) REFERENCES public.t_sucursales(id),
-  CONSTRAINT t_clases_def_id_profesor_fkey FOREIGN KEY (id_profesor) REFERENCES public.t_usuarios(id_usuario)
+  CONSTRAINT t_clases_def_id_sucursal_fkey FOREIGN KEY (id_sucursal) REFERENCES public.t_sucursales(id)
 );
 CREATE TABLE public.t_clases_instancia (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

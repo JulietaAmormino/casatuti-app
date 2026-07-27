@@ -188,7 +188,7 @@ const mapClassToFE = (c) => {
   return {
     id: c.id_clases_def,
     name: c.name || autoName,
-    teacherId: c.teacher_id,
+    teacherIds: c.teacher_ids || (c.teacher_id ? [c.teacher_id] : []),
     teacherName: c.teacher_name,
     day: dayStr,
     time: timeStr,
@@ -799,8 +799,12 @@ app.get('/api/classes', async (req, res) => {
       SELECT 
         c.id_clases_def AS id_clases_def,
         NULL AS name,
-        c.id_profesor AS teacher_id,
-        COALESCE(u.nombre || ' ' || u.apellido, 'Sin profesor') AS teacher_name,
+        c.id_profesores AS teacher_ids,
+        (
+          SELECT COALESCE(string_agg(u.nombre || ' ' || u.apellido, ', '), 'Sin profesor')
+          FROM public.t_usuarios u
+          WHERE u.id_usuarios = ANY(c.id_profesores)
+        ) AS teacher_name,
         CASE c.dia_semana
           WHEN 'Miercoles' THEN 'Miércoles'
           WHEN 'Sabado' THEN 'Sábado'
@@ -815,7 +819,6 @@ app.get('/api/classes', async (req, res) => {
           WHERE i.id_clases_def = c.id_clases_def AND i.bl_cancelada = true
         ) AS paused_dates
       FROM public.t_clases_def c
-      LEFT JOIN public.t_usuarios u ON c.id_profesor = u.id_usuarios
       LEFT JOIN public.t_sucursales s ON c.id_sucursal = s.id_sucursal
       WHERE c.bl_activa = true
       ORDER BY 
@@ -837,9 +840,9 @@ app.get('/api/classes', async (req, res) => {
 
 // Crear una clase o repeticiones múltiples
 app.post('/api/classes', async (req, res) => {
-  const { name, teacherId, teacherName, day, time, capacity, repeatDays, sucursal } = req.body;
+  const { name, teacherIds, teacherName, day, time, capacity, repeatDays, sucursal } = req.body;
 
-  if (!teacherId || !teacherName || !time || !capacity) {
+  if (!teacherIds || !teacherIds.length || !time || !capacity) {
     return res.status(400).json({ error: 'Faltan campos requeridos para crear el turno.' });
   }
 
@@ -865,7 +868,7 @@ app.post('/api/classes', async (req, res) => {
       const dia_semana = d.replace('é', 'e').replace('á', 'a'); // 'Miércoles' -> 'Miercoles', 'Sábado' -> 'Sabado'
 
       const query = `
-        INSERT INTO public.t_clases_def (dia_semana, hora_inicio, hora_fin, cupo_maximo, id_profesor, id_sucursal, bl_activa)
+        INSERT INTO public.t_clases_def (dia_semana, hora_inicio, hora_fin, cupo_maximo, id_profesores, id_sucursal, bl_activa)
         VALUES ($1, $2, $3, $4, $5, $6, true)
         RETURNING id_clases_def
       `;
@@ -874,7 +877,7 @@ app.post('/api/classes', async (req, res) => {
         hora_inicio,
         hora_fin,
         capacity,
-        teacherId,
+        teacherIds,
         idSucursal
       ]);
       const generatedId = result.rows[0].id_clases_def;
@@ -882,7 +885,7 @@ app.post('/api/classes', async (req, res) => {
       createdClasses.push({
         id_clases_def: generatedId,
         name: null,
-        teacher_id: teacherId,
+        teacher_ids: teacherIds,
         teacher_name: teacherName,
         day: d,
         time,
@@ -901,7 +904,7 @@ app.post('/api/classes', async (req, res) => {
 // Modificar datos de una clase (Turno)
 app.put('/api/classes/:id', async (req, res) => {
   const { id } = req.params;
-  const { teacherId, teacherName, day, time, capacity, sucursal } = req.body;
+  const { teacherIds, teacherName, day, time, capacity, sucursal } = req.body;
 
   if (!time || !capacity || !day) {
     return res.status(400).json({ error: 'Faltan campos requeridos para actualizar el turno.' });
@@ -925,7 +928,7 @@ app.put('/api/classes/:id', async (req, res) => {
 
     const query = `
       UPDATE public.t_clases_def
-      SET dia_semana = $1, hora_inicio = $2, hora_fin = $3, cupo_maximo = $4, id_profesor = $5, id_sucursal = $6
+      SET dia_semana = $1, hora_inicio = $2, hora_fin = $3, cupo_maximo = $4, id_profesores = $5, id_sucursal = $6
       WHERE id_clases_def = $7
       RETURNING *
     `;
@@ -934,7 +937,7 @@ app.put('/api/classes/:id', async (req, res) => {
       hora_inicio,
       hora_fin,
       Number(capacity),
-      teacherId,
+      teacherIds,
       idSucursal,
       id
     ]);
@@ -948,8 +951,12 @@ app.put('/api/classes/:id', async (req, res) => {
       SELECT 
         c.id_clases_def AS id_clases_def,
         NULL AS name,
-        c.id_profesor AS teacher_id,
-        COALESCE(u.nombre || ' ' || u.apellido, 'Sin profesor') AS teacher_name,
+        c.id_profesores AS teacher_ids,
+        (
+          SELECT COALESCE(string_agg(u.nombre || ' ' || u.apellido, ', '), 'Sin profesor')
+          FROM public.t_usuarios u
+          WHERE u.id_usuarios = ANY(c.id_profesores)
+        ) AS teacher_name,
         CASE c.dia_semana
           WHEN 'Miercoles' THEN 'Miércoles'
           WHEN 'Sabado' THEN 'Sábado'
@@ -964,7 +971,6 @@ app.put('/api/classes/:id', async (req, res) => {
           WHERE i.id_clases_def = c.id_clases_def AND i.bl_cancelada = true
         ) AS paused_dates
       FROM public.t_clases_def c
-      LEFT JOIN public.t_usuarios u ON c.id_profesor = u.id_usuarios
       LEFT JOIN public.t_sucursales s ON c.id_sucursal = s.id_sucursal
       WHERE c.id_clases_def = $1
     `;

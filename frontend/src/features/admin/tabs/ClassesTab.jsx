@@ -51,7 +51,7 @@ export default function ClassesTab({ showFeedback }) {
   const selectedDateString = formatDateToLocal(selectedDate);
 
   const [sucursal, setSucursal] = useState(branches.length > 0 ? branches[0].name : 'CENTRO');
-  const [teacherId, setTeacherId] = useState('');
+  const [teacherIds, setTeacherIds] = useState([]);
   const [capacity, setCapacity] = useState('8');
   const [startHour, setStartHour] = useState('18');
   const [startMinute, setStartMinute] = useState('00');
@@ -61,7 +61,7 @@ export default function ClassesTab({ showFeedback }) {
 
   // Estados para formulario de Edición
   const [editSucursal, setEditSucursal] = useState('CENTRO');
-  const [editTeacherId, setEditTeacherId] = useState('');
+  const [editTeacherIds, setEditTeacherIds] = useState([]);
   const [editCapacity, setEditCapacity] = useState('8');
   const [editStartHour, setEditStartHour] = useState('18');
   const [editStartMinute, setEditStartMinute] = useState('00');
@@ -74,7 +74,7 @@ export default function ClassesTab({ showFeedback }) {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!teacherId) { showFeedback('Por favor, seleccioná un profesor.', 'danger'); return; }
+    if (teacherIds.length === 0) { showFeedback('Por favor, seleccioná al menos un profesor.', 'danger'); return; }
     if (repeatDays.length === 0) { showFeedback('Seleccioná al menos un día.', 'danger'); return; }
     
     const startVal = Number(startHour) * 60 + Number(startMinute);
@@ -99,18 +99,18 @@ export default function ClassesTab({ showFeedback }) {
       }
     }
 
-    const teacher = users.find(u => u.id == teacherId);
+    const teacherNames = users.filter(u => teacherIds.includes(String(u.id))).map(t => t.name.split(' (')[0]).join(', ');
     try {
       const created = await createNewTurn({
-        teacherId,
-        teacherName: teacher ? teacher.name.split(' (')[0] : 'Sin profesor',
+        teacherIds: teacherIds.map(Number),
+        teacherName: teacherNames || 'Sin profesor',
         day: repeatDays[0],
         time: timeString,
         capacity: Number(capacity),
         sucursal
       }, repeatDays);
       showFeedback(`¡Se crearon ${created.length} turno(s) en ${sucursal} con éxito!`, 'info');
-      setTeacherId('');
+      setTeacherIds([]);
       setRepeatDays([]);
       setStartHour('18');
       setStartMinute('00');
@@ -125,7 +125,7 @@ export default function ClassesTab({ showFeedback }) {
   const handleStartEdit = (c) => {
     setEditingClass(c);
     setEditSucursal(c.sucursal || 'CENTRO');
-    setEditTeacherId(c.teacherId || '');
+    setEditTeacherIds(c.teacherIds ? c.teacherIds.map(String) : []);
     setEditCapacity(String(c.capacity || '8'));
     setEditDay(c.day || 'Lunes');
 
@@ -154,7 +154,7 @@ export default function ClassesTab({ showFeedback }) {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    if (!editTeacherId) { showFeedback('Por favor, seleccioná un profesor.', 'danger'); return; }
+    if (editTeacherIds.length === 0) { showFeedback('Por favor, seleccioná al menos un profesor.', 'danger'); return; }
 
     const startVal = Number(editStartHour) * 60 + Number(editStartMinute);
     const endVal = Number(editEndHour) * 60 + Number(editEndMinute);
@@ -177,11 +177,11 @@ export default function ClassesTab({ showFeedback }) {
       return;
     }
 
-    const teacher = users.find(u => u.id == editTeacherId);
+    const teacherNames = users.filter(u => editTeacherIds.includes(String(u.id))).map(t => t.name.split(' (')[0]).join(', ');
     try {
       await updateTurn(editingClass.id, {
-        teacherId: editTeacherId,
-        teacherName: teacher ? teacher.name.split(' (')[0] : 'Sin profesor',
+        teacherIds: editTeacherIds.map(Number),
+        teacherName: teacherNames || 'Sin profesor',
         day: editDay,
         time: timeString,
         capacity: Number(editCapacity),
@@ -272,11 +272,40 @@ export default function ClassesTab({ showFeedback }) {
             </div>
 
             <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Profesor asignado *</label>
-              <select className="input-tuti" value={teacherId} onChange={e => setTeacherId(e.target.value)} style={{ width: '100%', cursor: 'pointer' }}>
-                <option value="">-- Seleccionar profesor --</option>
-                {teachers.map(tc => <option key={tc.id} value={tc.id}>{tc.name}</option>)}
-              </select>
+              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Profesores asignados * (uno o más)</label>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                backgroundColor: '#FAF8F5',
+                padding: '12px',
+                borderRadius: '16px',
+                border: 'none'
+              }}>
+                {teachers.map(tc => {
+                  const sel = teacherIds.includes(String(tc.id));
+                  return (
+                    <button
+                      key={tc.id}
+                      type="button"
+                      onClick={() => setTeacherIds(prev => sel ? prev.filter(id => id !== String(tc.id)) : [...prev, String(tc.id)])}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: sel ? '1px solid var(--verde-oliva)' : '1px solid var(--gris-claro)',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        backgroundColor: sel ? 'var(--verde-oliva)' : 'var(--blanco)',
+                        color: sel ? 'var(--blanco)' : 'var(--gris-medio)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {tc.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -443,11 +472,40 @@ export default function ClassesTab({ showFeedback }) {
             </div>
 
             <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Profesor asignado *</label>
-              <select className="input-tuti" value={editTeacherId} onChange={e => setEditTeacherId(e.target.value)} style={{ width: '100%', cursor: 'pointer' }}>
-                <option value="">-- Seleccionar profesor --</option>
-                {teachers.map(tc => <option key={tc.id} value={tc.id}>{tc.name}</option>)}
-              </select>
+              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Profesores asignados * (uno o más)</label>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                backgroundColor: '#FAF8F5',
+                padding: '12px',
+                borderRadius: '16px',
+                border: 'none'
+              }}>
+                {teachers.map(tc => {
+                  const sel = editTeacherIds.includes(String(tc.id));
+                  return (
+                    <button
+                      key={tc.id}
+                      type="button"
+                      onClick={() => setEditTeacherIds(prev => sel ? prev.filter(id => id !== String(tc.id)) : [...prev, String(tc.id)])}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: sel ? '1px solid var(--verde-oliva)' : '1px solid var(--gris-claro)',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        backgroundColor: sel ? 'var(--verde-oliva)' : 'var(--blanco)',
+                        color: sel ? 'var(--blanco)' : 'var(--gris-medio)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {tc.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -694,79 +752,25 @@ export default function ClassesTab({ showFeedback }) {
                                 {c.time}
                               </span>
 
-                              {/* Profesor asignable */}
-                              {editingTeacherClassId === c.id ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }} onClick={e => e.stopPropagation()}>
-                                  <select
-                                    value={c.teacher_id || ''}
-                                    onChange={async (e) => {
-                                      const val = e.target.value;
-                                      if (val) {
-                                        try {
-                                          await changeClassTeacher(c.id, val);
-                                          showFeedback('Profesor asignado con éxito.', 'info');
-                                        } catch (err) {
-                                          showFeedback(err.message, 'danger');
-                                        }
-                                      }
-                                      setEditingTeacherClassId(null);
-                                    }}
-                                    onBlur={() => setTimeout(() => setEditingTeacherClassId(null), 200)}
-                                    autoFocus
-                                    className="input-tuti"
-                                    style={{
-                                      fontSize: '11px',
-                                      padding: '2px 6px',
-                                      height: '26px',
-                                      borderRadius: '6px',
-                                      border: 'none',
-                                      backgroundColor: 'var(--blanco)',
-                                      color: 'var(--gris-oscuro)',
-                                      fontFamily: 'Outfit, sans-serif',
-                                      cursor: 'pointer',
-                                      width: '160px'
-                                    }}
-                                  >
-                                    <option value="">-- Seleccionar profe --</option>
-                                    {teachers.map(tc => (
-                                      <option key={tc.id} value={tc.id}>
-                                        {tc.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              ) : (
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingTeacherClassId(c.id);
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    marginTop: '3px',
-                                    cursor: 'pointer',
-                                    padding: '2px 6px',
-                                    marginLeft: '-6px',
-                                    borderRadius: '6px',
-                                    transition: 'all 0.15s ease',
-                                    backgroundColor: 'transparent',
-                                  }}
-                                  className="hover-bg-crema"
-                                  title="Hacé clic para reasignar profesor"
-                                >
-                                  <svg style={{ width: '12px', height: '12px', color: 'var(--gris-medio)' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                                  </svg>
-                                  <span style={{ fontSize: '11px', color: 'var(--gris-medio)', fontWeight: '600' }}>
-                                    Profe: <span style={{ textDecoration: 'underline dotted var(--gris-medio)', color: 'var(--gris-oscuro)' }}>{c.teacherName}</span>
-                                  </span>
-                                  <svg style={{ width: '10px', height: '10px', color: 'var(--verde-oliva)', opacity: 0.8 }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-                                  </svg>
-                                </div>
-                              )}
+                              {/* Profesores asignados */}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  marginTop: '3px',
+                                  padding: '2px 6px',
+                                  marginLeft: '-6px',
+                                  borderRadius: '6px',
+                                }}
+                              >
+                                <svg style={{ width: '12px', height: '12px', color: 'var(--gris-medio)' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                                </svg>
+                                <span style={{ fontSize: '11px', color: 'var(--gris-medio)', fontWeight: '600' }}>
+                                  Profe/s: <span style={{ color: 'var(--gris-oscuro)' }}>{c.teacherName}</span>
+                                </span>
+                              </div>
                             </div>
 
                             {/* Cupo Badge */}

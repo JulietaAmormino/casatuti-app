@@ -324,7 +324,7 @@ export const AppProvider = ({ children }) => {
       // 3. Notificar a la alumna
       await mockService.createAlert({
         type: 'INFO',
-        message: `Te agregaron a la clase "${classData.name}" del día ${dateStr} (${classData.time}). Se ha descontado 1 crédito.`,
+        message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`,
         studentId: studentId
       });
 
@@ -409,7 +409,7 @@ export const AppProvider = ({ children }) => {
       // 3. Notificar a la alumna
       await mockService.createAlert({
         type: 'INFO',
-        message: `Te agregaron a la clase "${classData.name}" del día ${dateStr} (${classData.time}). Se ha descontado 1 crédito.`,
+        message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`,
         studentId: studentId
       });
 
@@ -653,7 +653,7 @@ export const AppProvider = ({ children }) => {
         for (const day of repeatDays) {
           const newCls = await mockService.createClass({
             name: classData.name,
-            teacherId: classData.teacherId,
+            teacherIds: classData.teacherIds,
             teacherName: classData.teacherName,
             day: day,
             time: classData.time,
@@ -666,7 +666,7 @@ export const AppProvider = ({ children }) => {
         // Crear solo una instancia con el día que tenga por defecto
         const newCls = await mockService.createClass({
           name: classData.name,
-          teacherId: classData.teacherId,
+          teacherIds: classData.teacherIds,
           teacherName: classData.teacherName,
           day: classData.day,
           time: classData.time,

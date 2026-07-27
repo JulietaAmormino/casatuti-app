@@ -55,7 +55,7 @@ export default function PerfilTab() {
       reader.onloadend = async () => {
         const base64Url = reader.result;
         setFormData(prev => ({ ...prev, avatar_url: base64Url }));
-        
+
         // Auto-guardar para que se refleje inmediatamente en el avatar superior
         try {
           await updateUserAction(currentUser.id, { ...formData, avatar_url: base64Url });
@@ -244,7 +244,10 @@ export default function PerfilTab() {
           letterSpacing: '1px',
           textTransform: 'uppercase'
         }}>
-          {currentUser?.role || 'ALUMNO'}
+          {currentUser?.role === 'ALUMNO' || !currentUser?.role 
+            ? (currentUser?.genero === 'X' ? 'ALUMNE' : (currentUser?.genero === 'F' ? 'ALUMNA' : 'ALUMNO'))
+            : (currentUser?.role === 'PROFESOR' ? (currentUser?.genero === 'X' ? 'PROFESORE' : (currentUser?.genero === 'F' ? 'PROFESORA' : 'PROFESOR')) : currentUser?.role)
+          }
         </span>
       </div>
 
@@ -338,7 +341,6 @@ export default function PerfilTab() {
           <div className="form-group">
             <label style={labelStyle}>Contraseña actual</label>
             <input type="password" name="currentPassword" style={inputStyle} value={passwordData.currentPassword} onChange={handlePassInput} />
-            <p style={{ fontSize: '11px', color: '#8C9B96', marginTop: '6px', marginLeft: '4px' }}>Déjalo en blanco si usas la contraseña por defecto (tuti123).</p>
           </div>
           <div className="form-group">
             <label style={labelStyle}>Nueva contraseña</label>
