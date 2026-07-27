@@ -78,12 +78,6 @@ export default function DashboardTab({ classes, bookings, students, studentProfi
       // Si tiene pagos pendientes, se suma el monto de esos pagos como su deuda a verificar
       const pendingSum = studentPendingPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       return total + pendingSum;
-    } else {
-      // Si no tiene pagos pendientes y tiene 0 créditos, se suma la deuda base de $8000
-      const profile = filteredStudentProfiles.find(p => p.studentId === st.id);
-      if (!profile || profile.classCredits === 0) {
-        return total + 8000;
-      }
     }
     return total;
   }, 0);
