@@ -504,7 +504,7 @@ export const AppProvider = ({ children }) => {
       throw new Error("Debe seleccionar al menos un estudiante");
     }
     await mockService.recordStudentPayment(studentIds, amount, creditsToAdd, paymentDate);
-    Promise.all([
+    await Promise.all([
       mockService.getStudentProfiles().then(setStudentProfiles),
       mockService.getPayments().then(setPayments),
     ]);
@@ -517,7 +517,9 @@ export const AppProvider = ({ children }) => {
     setPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'PAID' } : p));
     try {
       await mockService.confirmPayment(paymentId, confirmationDate);
-      Promise.all([
+      // await aquí para garantizar que studentProfiles (y por ende los créditos) se actualicen
+      // antes de que la alumna vea la pantalla de créditos
+      await Promise.all([
         mockService.getStudentProfiles().then(setStudentProfiles),
         mockService.getPayments().then(setPayments),
       ]);
