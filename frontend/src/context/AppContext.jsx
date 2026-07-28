@@ -259,706 +259,477 @@ export const AppProvider = ({ children }) => {
 
   // --- LÓGICA DE NEGOCIO ---
 
-  // 1. Reservar clase
+  // 1. Reservar clase — Optimistic UI
   const bookClass = async (classId, dateStr) => {
-    setLoading(true);
+    const studentId = currentUser.id;
+    const studentName = currentUser.name;
+    const profile = studentProfiles.find(p => p.studentId === studentId);
+    const classData = classes.find(c => c.id === classId);
+
+    if (!profile) {
+      throw new Error("No tenés créditos disponibles para reservar esta clase. Comprá un pack de clases desde la sección Créditos.");
+    }
+    if (!classData) {
+      throw new Error("No se encontró la clase seleccionada. Intentá de nuevo.");
+    }
+    if (classData.pausedDates && classData.pausedDates.includes(dateStr)) {
+      throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
+    }
+    if (profile.isBlocked) {
+      throw new Error("Tu cuenta está pausada. No puedes realizar nuevas reservas.");
+    }
+    if (profile.classCredits <= 0) {
+      mockService.createAlert({
+        type: 'NO_CREDITS',
+        message: `El alumno ${studentName} intentó reservar "${classData.name}" (${classData.day} - ${classData.time}) pero no tiene créditos de clase.`
+      }).then(() => mockService.getAlerts().then(setAlerts));
+      throw new Error("No tienes créditos de clase disponibles. Contacta al administrador.");
+    }
+    const existingBooking = bookings.find(
+      b => b.studentId === studentId && b.classId === classId && b.date === dateStr && b.status !== 'CANCELLED'
+    );
+    if (existingBooking) {
+      throw new Error("Ya tienes una reserva activa para esta clase en esa fecha.");
+    }
+    const activeBookingsForClass = bookings.filter(
+      b => b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
+    );
+    if (activeBookingsForClass.length >= classData.capacity) {
+      throw new Error("Esta clase ya no tiene cupos disponibles para la fecha seleccionada.");
+    }
+
+    // Optimistic: mostrar reserva y descontar crédito de inmediato
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticBooking = { id: optimisticId, studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', className: classData.name, classTime: classData.time, classDay: classData.day };
+    setBookings(prev => [...prev, optimisticBooking]);
+    setStudentProfiles(prev => prev.map(p =>
+      p.studentId === studentId ? { ...p, classCredits: p.classCredits - 1 } : p
+    ));
+
     try {
-      const studentId = currentUser.id;
-      const studentName = currentUser.name;
-      const profile = studentProfiles.find(p => p.studentId === studentId);
-      const classData = classes.find(c => c.id === classId);
-
-      if (!profile || !classData) {
-        throw new Error("Datos incorrectos");
-      }
-
-      // Validar si la clase está pausada para esta fecha
-      if (classData.pausedDates && classData.pausedDates.includes(dateStr)) {
-        throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
-      }
-
-      // Validar si la cuenta está pausada
-      if (profile.isBlocked) {
-        throw new Error("Tu cuenta está pausada. No puedes realizar nuevas reservas.");
-      }
-
-      // Validar créditos de clase del alumno
-      if (profile.classCredits <= 0) {
-        // Crear alerta de negocio para el admin
-        await mockService.createAlert({
-          type: 'NO_CREDITS',
-          message: `El alumno ${studentName} intentó reservar "${classData.name}" (${classData.day} - ${classData.time}) pero no tiene créditos de clase.`
-        });
-        // Recargar alertas en el estado
-        const loadedAlerts = await mockService.getAlerts();
-        setAlerts(loadedAlerts);
-        throw new Error("No tienes créditos de clase disponibles. Contacta al administrador.");
-      }
-
-      // Validar reservas ya existentes para el mismo alumno en la misma clase y fecha
-      const existingBooking = bookings.find(
-        b => b.studentId === studentId && b.classId === classId && b.date === dateStr && b.status !== 'CANCELLED'
-      );
-      if (existingBooking) {
-        throw new Error("Ya tienes una reserva activa para esta clase en esa fecha.");
-      }
-
-      // Validar cupos ocupados para esa fecha
-      const activeBookingsForClass = bookings.filter(
-        b => b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
-      );
-
-      if (activeBookingsForClass.length >= classData.capacity) {
-        throw new Error("Esta clase ya no tiene cupos disponibles para la fecha seleccionada.");
-      }
-
-      // Crear la reserva
-      const newBooking = await mockService.createBooking({
-        studentId,
-        studentName,
-        classId,
-        date: dateStr,
-        status: 'CONFIRMED'
-      });
-
-      // 3. Notificar a la alumna
-      await mockService.createAlert({
-        type: 'INFO',
-        message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`,
-        studentId: studentId
-      });
-
-      // Si el cupo queda crítico (0 o 1 lugar libre), creamos una alerta de alta ocupación
-      const newOccupancy = activeBookingsForClass.length + 1;
-      if (classData.capacity - newOccupancy <= 1) {
-        await mockService.createAlert({
-          type: 'HIGH_OCCUPANCY',
-          message: `La clase "${classData.name}" del ${classData.day} ${dateStr} (${classData.time}) tiene cupo crítico: solo queda ${classData.capacity - newOccupancy} lugar(es) libre(s).`
-        });
-      }
-
-      // Recargar datos actualizados
-      const loadedBookings = await mockService.getBookings();
-      setBookings(loadedBookings);
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      const loadedWaitlist = await mockService.getWaitlist().catch(() => []);
-      setWaitlist(loadedWaitlist);
-
+      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED' });
+      // Re-fetch silencioso en background
+      Promise.all([
+        mockService.getBookings().then(setBookings),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+        mockService.getAlerts().then(setAlerts),
+        mockService.getWaitlist().catch(() => []).then(setWaitlist),
+      ]);
       return newBooking;
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      // Revertir estado optimista
+      setBookings(prev => prev.filter(b => b.id !== optimisticId));
+      setStudentProfiles(prev => prev.map(p =>
+        p.studentId === studentId ? { ...p, classCredits: p.classCredits + 1 } : p
+      ));
+      throw err;
     }
   };
 
-  // 1b. Reservar clase para otro alumno (por el profesor)
+  // 1b. Reservar clase para otro alumno (por el profesor) — Optimistic UI
   const bookClassForStudent = async (studentId, classId, dateStr) => {
-    setLoading(true);
+    const student = users.find(u => u.id === studentId);
+    if (!student) throw new Error("Alumno no encontrado");
+    const studentName = student.name;
+    const profile = studentProfiles.find(p => p.studentId === studentId);
+    const classData = classes.find(c => c.id === classId);
+
+    if (!profile) throw new Error("La alumna no tiene créditos disponibles para reservar esta clase.");
+    if (!classData) throw new Error("No se encontró la clase seleccionada. Intentá de nuevo.");
+    if (classData.pausedDates && classData.pausedDates.includes(dateStr)) throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
+    if (profile.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
+    if (profile.classCredits <= 0) throw new Error("La alumna no tiene créditos de clase disponibles.");
+    const existingBooking = bookings.find(
+      b => b.studentId === studentId && b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
+    );
+    if (existingBooking) throw new Error("La alumna ya se encuentra inscripta en esta clase.");
+    const activeBookingsForClass = bookings.filter(b => b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED'));
+    if (activeBookingsForClass.length >= classData.capacity) throw new Error("No hay cupo disponible en esta clase.");
+
+    // Optimistic
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticBooking = { id: optimisticId, studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', className: classData.name, classTime: classData.time, classDay: classData.day };
+    setBookings(prev => [...prev, optimisticBooking]);
+    setStudentProfiles(prev => prev.map(p =>
+      p.studentId === studentId ? { ...p, classCredits: p.classCredits - 1 } : p
+    ));
+
     try {
-      const student = users.find(u => u.id === studentId);
-      if (!student) throw new Error("Alumno no encontrado");
-      const studentName = student.name;
-      
-      const profile = studentProfiles.find(p => p.studentId === studentId);
-      const classData = classes.find(c => c.id === classId);
-
-      if (!profile || !classData) {
-        throw new Error("Datos incorrectos");
-      }
-
-      // Validar si la clase está pausada para esta fecha
-      if (classData.pausedDates && classData.pausedDates.includes(dateStr)) {
-        throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
-      }
-
-      // Validar si la cuenta está pausada
-      if (profile.isBlocked) {
-        throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
-      }
-
-      // Validar créditos de clase del alumno
-      if (profile.classCredits <= 0) {
-        throw new Error("La alumna no tiene créditos de clase disponibles.");
-      }
-
-      // Validar reservas ya existentes para el mismo alumno en la misma clase y fecha
-      const existingBooking = bookings.find(
-        b => b.studentId === studentId && b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
-      );
-      if (existingBooking) {
-        throw new Error("La alumna ya se encuentra inscripta en esta clase.");
-      }
-
-      // Validar cupo
-      const activeBookingsForClass = bookings.filter(b => b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED'));
-      if (activeBookingsForClass.length >= classData.capacity) {
-        throw new Error("No hay cupo disponible en esta clase.");
-      }
-
-      // 1. Crear la reserva en backend (simulado o real)
-      const newBooking = await mockService.createBooking({
-        studentId,
-        studentName,
-        classId,
-        date: dateStr,
-        status: 'CONFIRMED'
-      });
-      
-      // 3. Notificar a la alumna
-      await mockService.createAlert({
-        type: 'INFO',
-        message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`,
-        studentId: studentId
-      });
-
-      // Recargar datos actualizados
-      const loadedBookings = await mockService.getBookings();
-      setBookings(loadedBookings);
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      
+      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED' });
+      mockService.createAlert({ type: 'INFO', message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`, studentId });
+      Promise.all([
+        mockService.getBookings().then(setBookings),
+        mockService.getAlerts().then(setAlerts),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
       return newBooking;
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      setBookings(prev => prev.filter(b => b.id !== optimisticId));
+      setStudentProfiles(prev => prev.map(p =>
+        p.studentId === studentId ? { ...p, classCredits: p.classCredits + 1 } : p
+      ));
+      throw err;
     }
   };
 
-  // 2. Cancelar reserva delegando la lógica al backend
+  // 2. Cancelar reserva — Optimistic UI
   const cancelBooking = async (bookingId, forceLate = false, forceRefund = false) => {
-    setLoading(true);
-    try {
-      // Llamada al backend real para procesar la cancelación. El backend calcula las 2 horas y devuelve los créditos si corresponde.
-      const response = await mockService.updateBooking(bookingId, { 
-        status: forceLate ? 'CANCELLED_LATE' : forceRefund ? 'CANCELLED_REFUND' : 'CANCELLED' 
-      });
+    const prevBookings = bookings;
+    const prevProfiles = studentProfiles;
+    // Optimistic: marcar como cancelada inmediatamente
+    const newStatus = forceLate ? 'CANCELLED_LATE' : 'CANCELLED';
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
 
-      // Recargar datos actualizados desde el backend
-      const loadedBookings = await mockService.getBookings();
-      setBookings(loadedBookings);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-      
-      // La respuesta del backend debería indicar si fue tardía
+    try {
+      const response = await mockService.updateBooking(bookingId, {
+        status: forceLate ? 'CANCELLED_LATE' : forceRefund ? 'CANCELLED_REFUND' : 'CANCELLED'
+      });
+      // Re-fetch silencioso
+      Promise.all([
+        mockService.getBookings().then(setBookings),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+        mockService.getAlerts().then(setAlerts),
+      ]);
       return { isLateCancellation: response.isLateCancellation };
     } catch (error) {
+      setBookings(prevBookings);
+      setStudentProfiles(prevProfiles);
       console.error('Error al cancelar reserva:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
   const rescheduleBooking = async (bookingId, newClassId, newDateStr) => {
-    setLoading(true);
+    const prevBookings = bookings;
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, classId: newClassId, date: newDateStr } : b));
     try {
       await mockService.rescheduleBooking(bookingId, newClassId, newDateStr);
-
-      // Recargar datos actualizados
-      const loadedBookings = await mockService.getBookings();
-      setBookings(loadedBookings);
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      const loadedWaitlist = await mockService.getWaitlist().catch(() => []);
-      setWaitlist(loadedWaitlist);
+      Promise.all([
+        mockService.getBookings().then(setBookings),
+        mockService.getAlerts().then(setAlerts),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+        mockService.getWaitlist().catch(() => []).then(setWaitlist),
+      ]);
       return true;
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      setBookings(prevBookings);
+      throw err;
     }
   };
 
-  // Agregar a la lista de espera
+  // Agregar a la lista de espera — Optimistic UI
   const joinWaitlistAction = async (classId, dateStr) => {
-    setLoading(true);
+    const studentId = currentUser.id;
+    const optimisticEntry = { id: `optimistic-${Date.now()}`, studentId, classId, date: dateStr };
+    setWaitlist(prev => [...prev, optimisticEntry]);
     try {
-      const studentId = currentUser.id;
-      await mockService.joinWaitlist({
-        studentId,
-        classId,
-        date: dateStr
-      });
-      const loadedWaitlist = await mockService.getWaitlist().catch(() => []);
-      setWaitlist(loadedWaitlist);
-    } finally {
-      setLoading(false);
+      await mockService.joinWaitlist({ studentId, classId, date: dateStr });
+      mockService.getWaitlist().catch(() => []).then(setWaitlist);
+    } catch (err) {
+      setWaitlist(prev => prev.filter(w => w.id !== optimisticEntry.id));
+      throw err;
     }
   };
 
-  // 3. Tomar asistencia por el profesor
+  // 3. Tomar asistencia — Optimistic UI
   const takeAttendance = async (bookingId, attendanceStatus) => {
-    setLoading(true);
+    const prevBookings = bookings;
+    const prevProfiles = studentProfiles;
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) throw new Error("Reserva no encontrada");
+    const studentId = booking.studentId;
+    const profile = studentProfiles.find(p => p.studentId === studentId);
+    if (!profile) throw new Error("Perfil de estudiante no encontrado");
+
+    // Optimistic
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: attendanceStatus } : b));
+    if (attendanceStatus === 'ATTENDED' && booking.status !== 'ATTENDED') {
+      setStudentProfiles(prev => prev.map(p =>
+        p.studentId === studentId ? { ...p, classCredits: Math.max(0, p.classCredits - 1) } : p
+      ));
+    }
+
     try {
-      const booking = bookings.find(b => b.id === bookingId);
-      if (!booking) throw new Error("Reserva no encontrada");
-
-      const studentId = booking.studentId;
-      const profile = studentProfiles.find(p => p.studentId === studentId);
-      if (!profile) throw new Error("Perfil de estudiante no encontrado");
-
       if (attendanceStatus === 'ATTENDED') {
-        // Al marcar Presente:
-        // Si el estado anterior no era ya ATTENDED, descontamos 1 crédito
         if (booking.status !== 'ATTENDED') {
-          // Descontar crédito de clase del perfil
           const newCredits = Math.max(0, profile.classCredits - 1);
           await mockService.updateStudentProfile(studentId, { classCredits: newCredits });
         }
         await mockService.updateBooking(bookingId, { status: 'ATTENDED' });
       } else if (attendanceStatus === 'ABSENT') {
-        // Al marcar Ausente:
-        // Se actualiza el estado de la reserva a ABSENT, lo cual libera el cupo para esa clase.
-        // Nota: en este taller, la inasistencia se registra y la clase queda liberada.
         await mockService.updateBooking(bookingId, { status: 'ABSENT' });
       }
-
-      // Recargar datos actualizados
-      const loadedBookings = await mockService.getBookings();
-      setBookings(loadedBookings);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-    } finally {
-      setLoading(false);
+      Promise.all([
+        mockService.getBookings().then(setBookings),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
+    } catch (err) {
+      setBookings(prevBookings);
+      setStudentProfiles(prevProfiles);
+      throw err;
     }
   };
 
-  // 4. Entrega de arcilla por el profesor durante la clase
+  // 4. Entrega de arcilla — Optimistic UI
   const deliverClayToStudent = async (studentId, studentName, teacherId, teacherName) => {
-    setLoading(true);
+    const profile = studentProfiles.find(p => p.studentId === studentId);
+    if (!profile) throw new Error("Perfil de estudiante no encontrado");
+    if (profile.monthlyClayKg >= 1.0) {
+      mockService.createAlert({ type: 'CLAY_LIMIT', message: `El alumno ${studentName} intentó retirar otro bloque de arcilla de 1kg en este mes, pero ya alcanzó su límite mensual.` })
+        .then(() => mockService.getAlerts().then(setAlerts));
+      throw new Error("Límite mensual de arcilla alcanzado (1kg por mes). No se puede entregar más arcilla.");
+    }
+    const todayStr = new Date().toISOString().split('T')[0];
+    // Optimistic
+    setStudentProfiles(prev => prev.map(p =>
+      p.studentId === studentId ? { ...p, monthlyClayKg: p.monthlyClayKg + 1.0, lastClayDeliveryDate: todayStr } : p
+    ));
+    const prevProfiles = studentProfiles;
     try {
-      const profile = studentProfiles.find(p => p.studentId === studentId);
-      if (!profile) throw new Error("Perfil de estudiante no encontrado");
-
-      // Validar límite estricto de 1kg al mes
-      if (profile.monthlyClayKg >= 1.0) {
-        // Generar alerta para el admin
-        await mockService.createAlert({
-          type: 'CLAY_LIMIT',
-          message: `El alumno ${studentName} intentó retirar otro bloque de arcilla de 1kg en este mes, pero ya alcanzó su límite mensual.`
-        });
-        const loadedAlerts = await mockService.getAlerts();
-        setAlerts(loadedAlerts);
-        throw new Error("Límite mensual de arcilla alcanzado (1kg por mes). No se puede entregar más arcilla.");
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-
-      // Registrar entrega en la lista de entregas
-      await mockService.createClayDelivery({
-        studentId,
-        studentName,
-        teacherId,
-        teacherName,
-        date: todayStr,
-        quantityKg: 1.0
-      });
-
-      // Actualizar perfil de estudiante
-      await mockService.updateStudentProfile(studentId, {
-        monthlyClayKg: profile.monthlyClayKg + 1.0,
-        lastClayDeliveryDate: todayStr
-      });
-
-      // Recargar datos
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      const loadedDeliveries = await mockService.getClayDeliveries();
-      setClayDeliveries(loadedDeliveries);
-    } finally {
-      setLoading(false);
+      await mockService.createClayDelivery({ studentId, studentName, teacherId, teacherName, date: todayStr, quantityKg: 1.0 });
+      await mockService.updateStudentProfile(studentId, { monthlyClayKg: profile.monthlyClayKg + 1.0, lastClayDeliveryDate: todayStr });
+      Promise.all([
+        mockService.getStudentProfiles().then(setStudentProfiles),
+        mockService.getClayDeliveries().then(setClayDeliveries),
+      ]);
+    } catch (err) {
+      setStudentProfiles(prevProfiles);
+      throw err;
     }
   };
 
-  // 5. Registrar pago manual e incrementar créditos por el ADMIN
+  // 5. Registrar pago manual — background
   const recordStudentPayment = async (studentIds, amount, creditsToAdd, paymentDate) => {
-    setLoading(true);
-    try {
-      if (!Array.isArray(studentIds) || studentIds.length === 0) {
-        throw new Error("Debe seleccionar al menos un estudiante");
-      }
-
-      // El backend ahora se encarga de crear el pago y actualizar los saldos
-      await mockService.recordStudentPayment(studentIds, amount, creditsToAdd, paymentDate);
-
-      // Recargar datos
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      const loadedPayments = await mockService.getPayments();
-      setPayments(loadedPayments);
-    } finally {
-      setLoading(false);
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      throw new Error("Debe seleccionar al menos un estudiante");
     }
+    await mockService.recordStudentPayment(studentIds, amount, creditsToAdd, paymentDate);
+    Promise.all([
+      mockService.getStudentProfiles().then(setStudentProfiles),
+      mockService.getPayments().then(setPayments),
+    ]);
   };
 
   const confirmPendingPayment = async (paymentId, confirmationDate) => {
-    setLoading(true);
+    const prevPayments = payments;
+    const prevProfiles = studentProfiles;
+    // Optimistic: marcar el pago como PAID
+    setPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'PAID' } : p));
     try {
       await mockService.confirmPayment(paymentId, confirmationDate);
-      // Recargar perfiles y pagos
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      const loadedPayments = await mockService.getPayments();
-      setPayments(loadedPayments);
-    } finally {
-      setLoading(false);
+      Promise.all([
+        mockService.getStudentProfiles().then(setStudentProfiles),
+        mockService.getPayments().then(setPayments),
+      ]);
+    } catch (err) {
+      setPayments(prevPayments);
+      setStudentProfiles(prevProfiles);
+      throw err;
     }
   };
 
   const confirmInsumoPayment = async (insumoId) => {
-    setLoading(true);
+    const prevBakes = bakes;
+    setBakes(prev => prev.map(b => b.id === insumoId ? { ...b, bl_pagado: true } : b));
     try {
       await mockService.confirmInsumoPayment(insumoId);
-      // Recargar insumos
-      const loadedBakes = await mockService.getBakes();
-      setBakes(loadedBakes);
-    } finally {
-      setLoading(false);
+      mockService.getBakes().then(setBakes);
+    } catch (err) {
+      setBakes(prevBakes);
+      throw err;
     }
   };
 
   const sendTransferReminder = async (paymentId) => {
-    setLoading(true);
-    try {
-      await mockService.notifyPaymentReminder(paymentId);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.notifyPaymentReminder(paymentId);
   };
 
   const requestStudentPayment = async (studentId, amount, creditsToAdd) => {
-    setLoading(true);
-    try {
-      await mockService.requestPayment({ studentId, amount, classCreditsAdded: creditsToAdd });
-      // Reload payments immediately so that if the user refreshes or switches to admin they see it
-      const loadedPayments = await mockService.getPayments();
-      setPayments(loadedPayments);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.requestPayment({ studentId, amount, classCreditsAdded: creditsToAdd });
+    mockService.getPayments().then(setPayments);
   };
 
-  // 6. Crear un nuevo turno (clase) con opción de repetición semanal por el ADMIN
+  // 6. Crear nuevo turno — background
   const createNewTurn = async (classData, repeatDays) => {
-    setLoading(true);
-    try {
-      const generatedClasses = [];
-      if (repeatDays && repeatDays.length > 0) {
-        // Crear una instancia de clase para cada día de la semana seleccionado
-        for (const day of repeatDays) {
-          const newCls = await mockService.createClass({
-            name: classData.name,
-            teacherIds: classData.teacherIds,
-            teacherName: classData.teacherName,
-            day: day,
-            time: classData.time,
-            capacity: classData.capacity,
-            sucursal: classData.sucursal
-          });
-          generatedClasses.push(newCls);
-        }
-      } else {
-        // Crear solo una instancia con el día que tenga por defecto
-        const newCls = await mockService.createClass({
-          name: classData.name,
-          teacherIds: classData.teacherIds,
-          teacherName: classData.teacherName,
-          day: classData.day,
-          time: classData.time,
-          capacity: classData.capacity,
-          sucursal: classData.sucursal
-        });
+    const generatedClasses = [];
+    if (repeatDays && repeatDays.length > 0) {
+      for (const day of repeatDays) {
+        const newCls = await mockService.createClass({ name: classData.name, teacherIds: classData.teacherIds, teacherName: classData.teacherName, day, time: classData.time, capacity: classData.capacity, sucursal: classData.sucursal });
         generatedClasses.push(newCls);
       }
-
-      // Recargar datos
-      const loadedClasses = await mockService.getClasses();
-      setClasses(loadedClasses);
-      return generatedClasses;
-    } finally {
-      setLoading(false);
+    } else {
+      const newCls = await mockService.createClass({ name: classData.name, teacherIds: classData.teacherIds, teacherName: classData.teacherName, day: classData.day, time: classData.time, capacity: classData.capacity, sucursal: classData.sucursal });
+      generatedClasses.push(newCls);
     }
+    mockService.getClasses().then(setClasses);
+    return generatedClasses;
   };
 
   const changeClassTeacher = async (classId, teacherId) => {
-    setLoading(true);
-    try {
-      await mockService.updateClassTeacher(classId, teacherId);
-      const loadedClasses = await mockService.getClasses();
-      setClasses(loadedClasses);
-    } finally {
-      setLoading(false);
-    }
+    setClasses(prev => prev.map(c => c.id === classId ? { ...c, teacherId } : c));
+    await mockService.updateClassTeacher(classId, teacherId);
+    mockService.getClasses().then(setClasses);
   };
 
   const updateTurn = async (classId, classData) => {
-    setLoading(true);
-    try {
-      await mockService.updateClass(classId, classData);
-      const loadedClasses = await mockService.getClasses();
-      setClasses(loadedClasses);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.updateClass(classId, classData);
+    mockService.getClasses().then(setClasses);
   };
 
   const deleteTurn = async (classId) => {
-    setLoading(true);
-    try {
-      await mockService.deleteClass(classId);
-      const loadedClasses = await mockService.getClasses();
-      setClasses(loadedClasses);
-    } finally {
-      setLoading(false);
-    }
+    setClasses(prev => prev.filter(c => c.id !== classId));
+    await mockService.deleteClass(classId);
+    mockService.getClasses().then(setClasses);
   };
 
   const toggleClassPauseAction = async (classId, dateStr, isPaused) => {
-    setLoading(true);
-    try {
-      await mockService.toggleClassPause(classId, dateStr, isPaused);
-      
-      // Recargar clases y reservas porque si se pausó, se cancelaron reservas
-      const loadedClasses = await mockService.getClasses();
-      setClasses(loadedClasses);
-      const loadedBookings = await mockService.getBookings();
-      setBookings(loadedBookings);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.toggleClassPause(classId, dateStr, isPaused);
+    Promise.all([
+      mockService.getClasses().then(setClasses),
+      mockService.getBookings().then(setBookings),
+      mockService.getStudentProfiles().then(setStudentProfiles),
+    ]);
   };
 
   const bulkAssignClasses = async (teacherId, classIds) => {
-    setLoading(true);
-    try {
-      await mockService.bulkAssignClassesToTeacher(teacherId, classIds);
-      const loadedClasses = await mockService.getClasses();
-      setClasses(loadedClasses);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.bulkAssignClassesToTeacher(teacherId, classIds);
+    mockService.getClasses().then(setClasses);
   };
 
   const createBake = async (bakeData) => {
-    setLoading(true);
-    try {
-      await mockService.createBake(bakeData);
-      setBakes(await mockService.getBakes());
-    } finally {
-      setLoading(false);
-    }
+    await mockService.createBake(bakeData);
+    mockService.getBakes().then(setBakes);
   };
 
   const createExtraClay = async (clayData) => {
-    setLoading(true);
-    try {
-      await mockService.createExtraClay(clayData);
-      setBakes(await mockService.getBakes());
-    } finally {
-      setLoading(false);
-    }
+    await mockService.createExtraClay(clayData);
+    mockService.getBakes().then(setBakes);
   };
 
-  // 7. Crear un nuevo estudiante o profesor por el ADMIN
+  // 7. Crear usuario — background
   const createNewUserAction = async (userData) => {
-    setLoading(true);
-    try {
-      const newUser = await mockService.createUser(userData);
-      const loadedUsers = await mockService.getUsers();
-      setUsers(loadedUsers);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-      return newUser;
-    } finally {
-      setLoading(false);
-    }
+    const newUser = await mockService.createUser(userData);
+    Promise.all([
+      mockService.getUsers().then(setUsers),
+      mockService.getStudentProfiles().then(setStudentProfiles),
+    ]);
+    return newUser;
   };
 
   const resendWelcomeEmailsAction = async (studentIds) => {
-    setLoading(true);
-    try {
-      const result = await mockService.resendWelcomeEmails(studentIds);
-      const loadedUsers = await mockService.getUsers();
-      setUsers(loadedUsers);
-      return result;
-    } finally {
-      setLoading(false);
-    }
+    const result = await mockService.resendWelcomeEmails(studentIds);
+    mockService.getUsers().then(setUsers);
+    return result;
   };
 
   const updateUserAction = async (userId, userData) => {
-    setLoading(true);
-    try {
-      const updatedUser = await mockService.updateUser(userId, userData);
-      const loadedUsers = await mockService.getUsers();
-      setUsers(loadedUsers);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-
-      if (currentUser && currentUser.id === userId) {
-        setCurrentUser(updatedUser);
-      }
-      return updatedUser;
-    } finally {
-      setLoading(false);
-    }
+    const updatedUser = await mockService.updateUser(userId, userData);
+    if (currentUser && currentUser.id === userId) setCurrentUser(updatedUser);
+    Promise.all([
+      mockService.getUsers().then(setUsers),
+      mockService.getStudentProfiles().then(setStudentProfiles),
+    ]);
+    return updatedUser;
   };
 
   const updateUserPasswordAction = async (userId, currentPassword, newPassword) => {
-    setLoading(true);
-    try {
-      await mockService.updateUserPassword(userId, currentPassword, newPassword);
-      return true;
-    } finally {
-      setLoading(false);
-    }
+    await mockService.updateUserPassword(userId, currentPassword, newPassword);
+    return true;
   };
 
   const deleteUserAction = async (userId) => {
-    setLoading(true);
-    try {
-      await mockService.deleteUser(userId);
-      const loadedUsers = await mockService.getUsers();
-      setUsers(loadedUsers);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-    } finally {
-      setLoading(false);
-    }
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    setStudentProfiles(prev => prev.filter(p => p.studentId !== userId));
+    await mockService.deleteUser(userId);
+    Promise.all([
+      mockService.getUsers().then(setUsers),
+      mockService.getStudentProfiles().then(setStudentProfiles),
+    ]);
   };
 
   const toggleStudentBlockAction = async (studentId, isBlocked) => {
-    setLoading(true);
-    try {
-      await mockService.toggleStudentBlock(studentId, isBlocked);
-      const loadedProfiles = await mockService.getStudentProfiles();
-      setStudentProfiles(loadedProfiles);
-    } finally {
-      setLoading(false);
-    }
+    setStudentProfiles(prev => prev.map(p =>
+      p.studentId === studentId ? { ...p, isBlocked } : p
+    ));
+    await mockService.toggleStudentBlock(studentId, isBlocked);
+    mockService.getStudentProfiles().then(setStudentProfiles);
   };
 
   const requestClassPauseAction = async (classId, className, dateStr, teacherName) => {
-    setLoading(true);
-    try {
-      await mockService.createAlert({
-        type: 'PAUSE_REQUEST',
-        message: `El profesor/a ${teacherName} solicitó pausar la clase "${className}" del día ${dateStr.split('-').reverse().join('/')}.`,
-        metadata: { classId, className, dateStr, teacherName }
-      });
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.createAlert({
+      type: 'PAUSE_REQUEST',
+      message: `El profesor/a ${teacherName} solicitó pausar la clase "${className}" del día ${dateStr.split('-').reverse().join('/')}.`,
+      metadata: { classId, className, dateStr, teacherName }
+    });
+    mockService.getAlerts().then(setAlerts);
   };
 
   const handlePauseRequestAction = async (alertId, accept, metadata) => {
-    setLoading(true);
+    // Optimistic: quitar la alerta de la lista
+    setAlerts(prev => prev.filter(a => a.id !== alertId));
     try {
       if (accept && metadata) {
         await mockService.toggleClassPause(metadata.classId, metadata.dateStr, true);
       }
       await mockService.resolveAlert(alertId);
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-      
-      // Reload classes if accepted
-      if (accept) {
-        const loadedClasses = await mockService.getClasses();
-        setClasses(loadedClasses);
-      }
-    } finally {
-      setLoading(false);
+      const refreshes = [mockService.getAlerts().then(setAlerts)];
+      if (accept) refreshes.push(mockService.getClasses().then(setClasses));
+      Promise.all(refreshes);
+    } catch (err) {
+      mockService.getAlerts().then(setAlerts); // restaurar en caso de error
+      throw err;
     }
   };
 
-  // 8. Marcar resuelta una alerta
+  // 8. Alertas — Optimistic UI
   const resolveAlertAction = async (alertId) => {
-    setLoading(true);
-    try {
-      await mockService.resolveAlert(alertId);
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
-    } finally {
-      setLoading(false);
-    }
+    setAlerts(prev => prev.filter(a => a.id !== alertId));
+    await mockService.resolveAlert(alertId);
+    mockService.getAlerts().then(setAlerts);
   };
 
   const resolveAllAlertsAction = async (alertIds) => {
-    setLoading(true);
+    setAlerts(prev => prev.filter(a => !alertIds.includes(a.id)));
     try {
       await Promise.all(alertIds.map(id => mockService.resolveAlert(id)));
-      const loadedAlerts = await mockService.getAlerts();
-      setAlerts(loadedAlerts);
+      mockService.getAlerts().then(setAlerts);
     } catch (error) {
       console.error("Error al resolver alertas:", error);
-    } finally {
-      setLoading(false);
+      mockService.getAlerts().then(setAlerts); // restaurar
     }
   };
 
-  // 9. Días no laborales (Calendario)
+  // 9. Días no laborales — background
   const addNonWorkingDay = async (fecha, motivo) => {
-    setLoading(true);
-    try {
-      await mockService.addNonWorkingDay(fecha, motivo);
-      const loaded = await mockService.getNonWorkingDays();
-      setNonWorkingDays(loaded);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.addNonWorkingDay(fecha, motivo);
+    mockService.getNonWorkingDays().then(setNonWorkingDays);
   };
 
   const deleteNonWorkingDay = async (fecha) => {
-    setLoading(true);
-    try {
-      await mockService.deleteNonWorkingDay(fecha);
-      const loaded = await mockService.getNonWorkingDays();
-      setNonWorkingDays(loaded);
-    } finally {
-      setLoading(false);
-    }
+    setNonWorkingDays(prev => prev.filter(d => d.fecha !== fecha));
+    await mockService.deleteNonWorkingDay(fecha);
+    mockService.getNonWorkingDays().then(setNonWorkingDays);
   };
 
-  // --- GESTIÓN DE PAQUETES ---
+  // Packs — background
   const createPack = async (packData) => {
-    setLoading(true);
-    try {
-      await mockService.createPack(packData);
-      const loadedPacks = await mockService.getPacks();
-      setPacks(loadedPacks);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.createPack(packData);
+    mockService.getPacks().then(setPacks);
   };
 
   const updatePack = async (packId, packData) => {
-    setLoading(true);
-    try {
-      await mockService.updatePack(packId, packData);
-      const loadedPacks = await mockService.getPacks();
-      setPacks(loadedPacks);
-    } finally {
-      setLoading(false);
-    }
+    await mockService.updatePack(packId, packData);
+    mockService.getPacks().then(setPacks);
   };
 
   const deletePack = async (packId) => {
-    setLoading(true);
+    setPacks(prev => prev.filter(p => p.id !== packId));
     try {
       await mockService.deletePack(packId);
-      const loadedPacks = await mockService.getPacks();
-      setPacks(loadedPacks);
+      mockService.getPacks().then(setPacks);
     } catch (error) {
       console.error('Error al eliminar paquete:', error);
+      mockService.getPacks().then(setPacks); // restaurar
       throw error;
     }
   };
@@ -1002,50 +773,34 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // --- FAQS CRUD ---
+  // FAQs — background
   const createFaq = async (faq) => {
-    setLoading(true);
-    try {
-      await mockService.createFaq(faq);
-      setFaqs(await mockService.getFaqs());
-    } finally { setLoading(false); }
+    await mockService.createFaq(faq);
+    mockService.getFaqs().then(setFaqs);
   };
   const updateFaq = async (id, data) => {
-    setLoading(true);
-    try {
-      await mockService.updateFaq(id, data);
-      setFaqs(await mockService.getFaqs());
-    } finally { setLoading(false); }
+    await mockService.updateFaq(id, data);
+    mockService.getFaqs().then(setFaqs);
   };
   const deleteFaq = async (id) => {
-    setLoading(true);
-    try {
-      await mockService.deleteFaq(id);
-      setFaqs(await mockService.getFaqs());
-    } finally { setLoading(false); }
+    setFaqs(prev => prev.filter(f => f.id !== id));
+    await mockService.deleteFaq(id);
+    mockService.getFaqs().then(setFaqs);
   };
 
-  // --- BRANCHES CRUD ---
+  // Branches — background
   const createBranch = async (branch) => {
-    setLoading(true);
-    try {
-      await mockService.createBranch(branch);
-      setBranches(await mockService.getBranches());
-    } finally { setLoading(false); }
+    await mockService.createBranch(branch);
+    mockService.getBranches().then(setBranches);
   };
   const updateBranch = async (id, data) => {
-    setLoading(true);
-    try {
-      await mockService.updateBranch(id, data);
-      setBranches(await mockService.getBranches());
-    } finally { setLoading(false); }
+    await mockService.updateBranch(id, data);
+    mockService.getBranches().then(setBranches);
   };
   const deleteBranch = async (id) => {
-    setLoading(true);
-    try {
-      await mockService.deleteBranch(id);
-      setBranches(await mockService.getBranches());
-    } finally { setLoading(false); }
+    setBranches(prev => prev.filter(b => b.id !== id));
+    await mockService.deleteBranch(id);
+    mockService.getBranches().then(setBranches);
   };
 
   return (

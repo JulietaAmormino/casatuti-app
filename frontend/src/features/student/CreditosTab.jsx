@@ -172,7 +172,7 @@ export default function CreditosTab({
 
             <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <a
-                href="https://wa.me/5493517371575?text=Hola,%20acabo%20de%20realizar%20una%20transferencia%20para%20comprar%20clases."
+                href="https://wa.me/5493541591817?text=Hola,%20acabo%20de%20realizar%20una%20transferencia%20para%20comprar%20clases."
                 target="_blank"
                 rel="noreferrer"
                 className="btn-tuti"
@@ -223,7 +223,7 @@ export default function CreditosTab({
 
         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <a
-            href={`https://wa.me/5493517371575?text=${encodeURIComponent(
+            href={`https://wa.me/5493541591817?text=${encodeURIComponent(
               payingDebt.creditsAdded 
                 ? 'Hola, acabo de realizar la transferencia para pagar mi deuda de clases.' 
                 : `Hola, acabo de realizar la transferencia para pagar mi deuda de insumos (${payingDebt.description}).`
