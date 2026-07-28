@@ -608,14 +608,48 @@ export const AppProvider = ({ children }) => {
     mockService.getBakes().then(setBakes);
   };
 
-  // 7. Crear usuario — background
+  // 7. Crear usuario — Optimistic UI
   const createNewUserAction = async (userData) => {
-    const newUser = await mockService.createUser(userData);
-    Promise.all([
-      mockService.getUsers().then(setUsers),
-      mockService.getStudentProfiles().then(setStudentProfiles),
-    ]);
-    return newUser;
+    const tempId = `optimistic-${Date.now()}`;
+    const optimisticUser = {
+      id: tempId,
+      name: userData.name || `${userData.nombre || ''} ${userData.apellido || ''}`.trim(),
+      email: userData.email,
+      role: userData.role,
+      nro_documento: userData.nro_documento,
+      telefono: userData.telefono,
+      instagram: userData.instagram,
+      fecha_nacimiento: userData.fecha_nacimiento,
+      sucursal: userData.sucursal,
+      genero: userData.genero || 'F'
+    };
+
+    setUsers(prev => [...prev, optimisticUser]);
+    if (userData.role === 'ALUMNO') {
+      setStudentProfiles(prev => [
+        ...prev,
+        { studentId: tempId, classCredits: 0, monthlyClayKg: 0, isBlocked: false }
+      ]);
+    }
+
+    try {
+      const newUser = await mockService.createUser(userData);
+      setUsers(prev => prev.map(u => u.id === tempId ? newUser : u));
+      if (userData.role === 'ALUMNO') {
+        setStudentProfiles(prev => prev.map(p => p.studentId === tempId ? { ...p, studentId: newUser.id } : p));
+      }
+      Promise.all([
+        mockService.getUsers().then(setUsers),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
+      return newUser;
+    } catch (err) {
+      setUsers(prev => prev.filter(u => u.id !== tempId));
+      if (userData.role === 'ALUMNO') {
+        setStudentProfiles(prev => prev.filter(p => p.studentId !== tempId));
+      }
+      throw err;
+    }
   };
 
   const resendWelcomeEmailsAction = async (studentIds) => {
@@ -625,13 +659,41 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateUserAction = async (userId, userData) => {
-    const updatedUser = await mockService.updateUser(userId, userData);
-    if (currentUser && currentUser.id === userId) setCurrentUser(updatedUser);
-    Promise.all([
-      mockService.getUsers().then(setUsers),
-      mockService.getStudentProfiles().then(setStudentProfiles),
-    ]);
-    return updatedUser;
+    const prevUsers = users;
+    const prevProfiles = studentProfiles;
+
+    const updatedFields = {
+      name: userData.name || (userData.nombre && userData.apellido ? `${userData.nombre} ${userData.apellido}` : undefined),
+      email: userData.email,
+      nro_documento: userData.nro_documento,
+      telefono: userData.telefono,
+      instagram: userData.instagram,
+      fecha_nacimiento: userData.fecha_nacimiento,
+      sucursal: userData.sucursal,
+      genero: userData.genero,
+      avatar_url: userData.avatar_url
+    };
+
+    Object.keys(updatedFields).forEach(key => updatedFields[key] === undefined && delete updatedFields[key]);
+
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedFields } : u));
+
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser(prev => ({ ...prev, ...updatedFields }));
+    }
+
+    try {
+      const updatedUser = await mockService.updateUser(userId, userData);
+      Promise.all([
+        mockService.getUsers().then(setUsers),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
+      return updatedUser;
+    } catch (err) {
+      setUsers(prevUsers);
+      setStudentProfiles(prevProfiles);
+      throw err;
+    }
   };
 
   const updateUserPasswordAction = async (userId, currentPassword, newPassword) => {
@@ -640,13 +702,23 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteUserAction = async (userId) => {
+    const prevUsers = users;
+    const prevProfiles = studentProfiles;
+
     setUsers(prev => prev.filter(u => u.id !== userId));
     setStudentProfiles(prev => prev.filter(p => p.studentId !== userId));
-    await mockService.deleteUser(userId);
-    Promise.all([
-      mockService.getUsers().then(setUsers),
-      mockService.getStudentProfiles().then(setStudentProfiles),
-    ]);
+
+    try {
+      await mockService.deleteUser(userId);
+      Promise.all([
+        mockService.getUsers().then(setUsers),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
+    } catch (err) {
+      setUsers(prevUsers);
+      setStudentProfiles(prevProfiles);
+      throw err;
+    }
   };
 
   const toggleStudentBlockAction = async (studentId, isBlocked) => {
