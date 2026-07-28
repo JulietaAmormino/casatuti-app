@@ -40,6 +40,27 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   );
 }
 
+// Helper centralizado para enviar Web Push a uno o varios usuarios
+const sendPush = async (userIds, title, body) => {
+  try {
+    const ids = Array.isArray(userIds) ? userIds : [userIds];
+    const payload = JSON.stringify({ title, body });
+    for (const uid of ids) {
+      const subs = await db.query(
+        'SELECT subscription FROM public.t_suscripciones_push WHERE id_usuarios = $1',
+        [uid]
+      );
+      for (const s of subs.rows) {
+        webPush.sendNotification(s.subscription, payload).catch(e =>
+          console.error(`[Push] Error enviando a usuario ${uid}:`, e.message)
+        );
+      }
+    }
+  } catch (e) {
+    console.error('[Push] Error en sendPush:', e.message);
+  }
+};
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -1070,6 +1091,12 @@ app.post('/api/classes/:id/pause', async (req, res) => {
           "INSERT INTO public.t_historial_creditos (id_usuarios, movimiento, origen_movimiento) VALUES ($1, 1, 'Cancelación por Administrador (Turno Pausado)')",
           [inscripcion.id_usuarios]
         );
+        // Push nativo a la alumna
+        await sendPush(
+          inscripcion.id_usuarios,
+          '🚫 Clase cancelada',
+          `Tu clase del ${date} fue cancelada por la administración. Se te devolvió 1 crédito.`
+        );
       }
     }
 
@@ -1406,21 +1433,17 @@ app.post('/api/bookings', async (req, res) => {
       created_at: new Date()
     };
 
-    // --- Notificación Web Push a Admins ---
+    // --- Notificación Web Push solo a Admins ---
     try {
-      const payload = JSON.stringify({
-        title: 'Nueva Reserva',
-        body: `La alumna ${studentName} se ha inscripto a una clase el ${date} a las ${classTime}.`
-      });
-      const subQuery = await db.query('SELECT subscription FROM public.t_suscripciones_push');
-      for (let s of subQuery.rows) {
-        try {
-          await webPush.sendNotification(s.subscription, payload);
-        } catch (e) {
-          console.error('Error enviando push a suscripción:', e);
-          // Si la suscripción expiró, se podría eliminar aquí
-        }
-      }
+      const adminUsersRes = await db.query(
+        "SELECT id_usuarios FROM public.t_usuarios WHERE rol IN ('ADMIN', 'SOPORTE')"
+      );
+      const adminIds = adminUsersRes.rows.map(r => r.id_usuarios);
+      await sendPush(
+        adminIds,
+        'Nueva Reserva 📅',
+        `${studentName} se inscribió a la clase del ${date} a las ${classTime}.`
+      );
     } catch (pushErr) {
       console.error('Error procesando web push en reservas:', pushErr);
     }
@@ -1525,6 +1548,12 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
         await db.query(
           'INSERT INTO public.t_notificaciones (id_usuarios, titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, $4, false, NOW())',
           [wlUser.id_usuarios, 'Cupo Liberado', notifyMsg, 'WAITLIST_FREE_SPOT']
+        );
+        // Push nativo al celular
+        await sendPush(
+          wlUser.id_usuarios,
+          '¡Cupo disponible! 🎉',
+          notifyMsg
         );
       }
 
@@ -2071,6 +2100,29 @@ app.post('/api/payments/request', async (req, res) => {
       [studentId, creditsToAdd, amount]
     );
 
+    // Notificar a todos los admins por push
+    try {
+      const studentRes = await db.query(
+        'SELECT nombre, apellido FROM public.t_usuarios WHERE id_usuarios = $1',
+        [studentId]
+      );
+      const studentName = studentRes.rows.length > 0
+        ? `${studentRes.rows[0].nombre} ${studentRes.rows[0].apellido}`
+        : 'Una alumna';
+
+      const adminRes = await db.query(
+        "SELECT id_usuarios FROM public.t_usuarios WHERE rol IN ('ADMIN', 'SOPORTE')"
+      );
+      const adminIds = adminRes.rows.map(r => r.id_usuarios);
+      await sendPush(
+        adminIds,
+        '💰 Nueva solicitud de pago',
+        `${studentName} solicitó la compra de ${creditsToAdd} crédito${creditsToAdd === 1 ? '' : 's'} por $${Number(amount).toLocaleString('es-AR')}. Ya podés confirmarla.`
+      );
+    } catch (pushErr) {
+      console.error('[Push] Error notificando admins sobre solicitud de pago:', pushErr.message);
+    }
+
     res.json({ success: true, paymentId: rows[0].id });
   } catch (error) {
     console.error('Error al solicitar pago:', error);
@@ -2106,6 +2158,17 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
       'UPDATE public.t_historial_creditos SET estado = $1, motivo = $2, fec_movimiento = $3 WHERE id_historial_credito = $4',
       ['PAID', 'Acreditación por Pago Confirmado', updateDate, id]
     );
+
+    // Notificar a la alumna por push
+    try {
+      await sendPush(
+        payment.id_usuarios,
+        '✅ Pago confirmado',
+        `Tu pago de ${payment.cantidad} crédito${payment.cantidad === 1 ? '' : 's'} fue confirmado. ¡Ya podés reservar tus clases!`
+      );
+    } catch (pushErr) {
+      console.error('[Push] Error notificando alumna sobre confirmación de pago:', pushErr.message);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -2521,7 +2584,7 @@ app.post('/api/push/subscribe', async (req, res) => {
 const runExpirationJob = async () => {
   try {
     console.log('[Job] Corriendo verificación de vencimientos de créditos...');
-    const usersRes = await db.query('SELECT id_usuario, id_usuarios, saldo_actual FROM public.t_cuenta_alumno WHERE saldo_actual > 0');
+    const usersRes = await db.query('SELECT id_usuarios, saldo_actual FROM public.t_cuenta_alumno WHERE saldo_actual > 0');
 
     for (const user of usersRes.rows) {
       const studentId = user.id_usuarios; // UUID from t_usuarios
