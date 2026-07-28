@@ -89,8 +89,8 @@ export default function TeachersTab({ showFeedback, onEdit }) {
         sucursal: teacherBranches.length > 0 ? teacherBranches.join(', ') : 'CENTRO',
         genero: genero
       });
-      const p = genero === 'M' ? 'o' : genero === 'X' ? 'e' : 'a';
-      showFeedback(`¡Profesor${genero === 'M' ? '' : ''+p} "${fullName}" registrad${p} con éxito!`, 'success');
+      const p = genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a';
+      showFeedback(`¡Profesor${genero === 'M' ? '' : (genero === 'X' ? '@' : 'a')} "${fullName}" registrad${p} con éxito!`, 'success');
       setNombre(''); setApellido(''); setEmail(''); setDocumento('');
       setTelefono(''); setInstagram(''); setBirthdate(''); setGenero('F'); setTeacherBranches([]);
       setMode('list'); // Regresa al listado después de crear
@@ -139,7 +139,7 @@ export default function TeachersTab({ showFeedback, onEdit }) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--gris-oscuro)', margin: 0 }}>
-                {genero === 'M' ? 'Nuevo profesor' : genero === 'X' ? 'Nuevo profesore' : 'Nueva profesora'}
+                {genero === 'M' ? 'Nuevo profesor' : genero === 'X' ? 'Nuev@ profesor@' : 'Nueva profesora'}
               </h3>
               <button
                 type="button"
@@ -250,7 +250,7 @@ export default function TeachersTab({ showFeedback, onEdit }) {
               </Select>
             </div>
             <button type="submit" className="btn-tuti btn-success-soft" style={{ marginTop: '8px', fontSize: '14px', padding: '12px' }}>
-              + Registrar Profesor{genero === 'M' ? '' : genero === 'X' ? 'e' : 'a'}
+              + Registrar Profesor{genero === 'M' ? '' : genero === 'X' ? '@' : 'a'}
             </button>
           </form>
           </div>

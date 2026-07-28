@@ -63,7 +63,8 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
         sucursal: branch,
         genero: genero
       });
-      showFeedback(`¡Alumn${genero==='M'?'o':genero==='X'?'e':'a'} "${fullName}" registrad${genero==='M'?'o':genero==='X'?'e':'a'} con éxito!`, 'success');
+      const p = genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a';
+      showFeedback(`¡Alumn${p} "${fullName}" registrad${p} con éxito!`, 'success');
       setNombre(''); setApellido(''); setEmail(''); setDocumento('');
       setTelefono(''); setInstagram(''); setBirthdate(''); setGenero('F'); setBranch(branches.length > 0 ? branches[0].name : 'CENTRO');
       setMode('list'); // Redirigir a listado después de crear
@@ -117,7 +118,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--gris-oscuro)', margin: 0 }}>
-                {genero === 'M' ? 'Nuevo alumno' : genero === 'X' ? 'Nuevo alumne' : 'Nueva alumna'}
+                {genero === 'M' ? 'Nuevo alumno' : genero === 'X' ? 'Nuev@ alumn@' : 'Nueva alumna'}
               </h3>
               <button
                 type="button"
@@ -184,7 +185,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
             </div>
 
             <button type="submit" className="btn-tuti btn-success-soft" style={{ marginTop: '8px', fontSize: '14px', padding: '14px', width: '100%', fontWeight: '700' }}>
-              + Registrar Alumn{genero === 'M' ? 'o' : genero === 'X' ? 'e' : 'a'}
+              + Registrar Alumn{genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a'}
             </button>
           </form>
           </div>

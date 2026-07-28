@@ -25,12 +25,12 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
     if (isTeacher) {
       if (genero === 'F') return 'Modificar profesora';
       if (genero === 'M') return 'Modificar profesor';
-      if (genero === 'X') return 'Modificar profesore';
+      if (genero === 'X') return 'Modificar profesor@';
       return 'Modificar profesor/a';
     } else {
       if (genero === 'F') return 'Modificar alumna';
       if (genero === 'M') return 'Modificar alumno';
-      if (genero === 'X') return 'Modificar alumne';
+      if (genero === 'X') return 'Modificar alumn@';
       return 'Modificar alumno/a';
     }
   };
@@ -55,8 +55,8 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
       if (updateUserSecondaryRole && secondaryRole !== (user?.secondaryRole || '')) {
         await updateUserSecondaryRole(userId, secondaryRole === '' ? null : secondaryRole);
       }
-      const p = genero === 'M' ? 'o' : genero === 'X' ? 'e' : 'a';
-      showFeedback(isTeacher ? `¡Profesor${genero==='M'?'':''+p} modificad${p} con éxito!` : `¡Alumn${p} modificad${p} con éxito!`, 'info');
+      const p = genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a';
+      showFeedback(isTeacher ? `¡Profesor${genero==='M'?'':(genero==='X'?'@':'a')} modificad${p} con éxito!` : `¡Alumn${p} modificad${p} con éxito!`, 'info');
       onClose();
     } catch (err) {
       showFeedback(err.message, 'danger');

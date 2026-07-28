@@ -213,7 +213,7 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <span className="badge badge-clay" style={{ marginBottom: '6px' }}>
-                {currentUser?.genero === 'X' ? 'Alumne active' : (currentUser?.genero === 'F' ? 'Alumna activa' : 'Alumno activo')}
+                {currentUser?.genero === 'X' ? 'Alumn@ activ@' : (currentUser?.genero === 'F' ? 'Alumna activa' : 'Alumno activo')}
               </span>
               <h2 style={{ fontSize: '26px' }}>
                 {activeTab === 'inicio' ? `¡Hola, ${currentUser.name}!` : activeTab === 'turnos' ? 'Turnos' : 'Mi perfil'}

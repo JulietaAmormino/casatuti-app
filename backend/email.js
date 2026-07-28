@@ -46,7 +46,7 @@ export const getPronoun = (genero) => {
   switch (genero?.toUpperCase()) {
     case 'M': return 'o';
     case 'F': return 'a';
-    case 'X': return 'e';
+    case 'X': return '@';
     default: return 'a'; // Default histórico
   }
 };

@@ -245,8 +245,8 @@ export default function PerfilTab() {
           textTransform: 'uppercase'
         }}>
           {currentUser?.role === 'ALUMNO' || !currentUser?.role 
-            ? (currentUser?.genero === 'X' ? 'ALUMNE' : (currentUser?.genero === 'F' ? 'ALUMNA' : 'ALUMNO'))
-            : (currentUser?.role === 'PROFESOR' ? (currentUser?.genero === 'X' ? 'PROFESORE' : (currentUser?.genero === 'F' ? 'PROFESORA' : 'PROFESOR')) : currentUser?.role)
+            ? (currentUser?.genero === 'X' ? 'ALUMN@' : (currentUser?.genero === 'F' ? 'ALUMNA' : 'ALUMNO'))
+            : (currentUser?.role === 'PROFESOR' ? (currentUser?.genero === 'X' ? 'PROFESOR@' : (currentUser?.genero === 'F' ? 'PROFESORA' : 'PROFESOR')) : currentUser?.role)
           }
           {currentUser?.sucursal && (currentUser?.role === 'ALUMNO' || !currentUser?.role) && ` · ${currentUser.sucursal}`}
         </span>
