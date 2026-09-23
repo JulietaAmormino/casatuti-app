@@ -2563,9 +2563,11 @@ app.delete('/api/faqs/:id', async (req, res) => {
 // ==========================================
 // INICIAR SERVIDOR
 // ==========================================
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+  });
+}
 
 // ==========================================
 // PUSH NOTIFICATIONS ENDPOINT
@@ -2666,7 +2668,11 @@ const runExpirationJob = async () => {
   }
 };
 
-// Ejecutar al iniciar el servidor
-setTimeout(runExpirationJob, 5000);
-// Ejecutar cada 1 hora
-setInterval(runExpirationJob, 60 * 60 * 1000);
+// Ejecutar al iniciar el servidor (localmente)
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+  setTimeout(runExpirationJob, 5000);
+  // Ejecutar cada 1 hora
+  setInterval(runExpirationJob, 60 * 60 * 1000);
+}
+
+export default app;
