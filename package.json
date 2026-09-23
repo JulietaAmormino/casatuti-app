@@ -1,6 +1,11 @@
 {
   "name": "casatuti-app-root",
   "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "start": "node scripts/start-local.js",
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
