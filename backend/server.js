@@ -244,9 +244,25 @@ const mapFaqToFE = (f) => {
 // 1. ENDPOINTS DE AUTENTICACIÓN
 // ==========================================
 
-// Ruta de salud de la API
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Ruta de salud de la API (también sirve para mantener activa la base de datos de Supabase)
+app.get('/api/health', async (req, res) => {
+  try {
+    // Realizamos una consulta rápida para asegurar que la base de datos responda y evitar que se pause
+    await db.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('❌ Error en el health check de la base de datos:', err);
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Login
