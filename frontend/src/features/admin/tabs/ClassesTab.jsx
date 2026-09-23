@@ -915,7 +915,7 @@ export default function ClassesTab({ showFeedback }) {
         <button
           onClick={() => {
             setSucursal(branches.length > 0 ? branches[0].name : 'CENTRO');
-            setTeacherId('');
+            setTeacherIds([]);
             setCapacity('8');
             setStartHour('18');
             setStartMinute('00');
