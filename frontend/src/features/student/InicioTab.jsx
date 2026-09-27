@@ -33,21 +33,23 @@ export default function InicioTab({
   onReprogramar,
   onOpenBuyModal,
   onGoToTurnos,
+  onGoToCreditos,
 }) {
   const { faqs = [] } = useApp();
   const [showDebtsModal, setShowDebtsModal] = useState(false);
 
   const [showNoCreditsError, setShowNoCreditsError] = useState(false);
+  const [faqSearch, setFaqSearch] = useState('');
 
   const myPendingPayments = (payments || []).filter(
     p => p.studentId == currentUser.id && p.status === 'PENDING'
   );
-  
+
   const myPendingInsumos = (bakes || []).filter(
     b => b.studentId == currentUser.id && !b.isPaid && b.price > 0
   );
 
-  const pendingDebt = 
+  const pendingDebt =
     myPendingPayments.reduce((sum, p) => sum + Number(p.amount), 0) +
     myPendingInsumos.reduce((sum, b) => sum + Number(b.price), 0);
 
@@ -58,34 +60,21 @@ export default function InicioTab({
     <>
       {/* Resumen (Estilo Dashboard) */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>Mi resumen</h3>
-          <button
-            onClick={onOpenBuyModal}
-            className="btn-tuti"
-            style={{ fontSize: '12px', padding: '8px 14px', width: 'auto', backgroundColor: 'var(--gris-oscuro)', color: 'var(--blanco)', border: 'none', borderRadius: '20px' }}
-          >
-            + Comprar
-          </button>
+        {/* Header TU TALLER AL DÍA */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '0 4px' }}>
+          <h3 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--gris-medio)', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '0.5px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
+            TU TALLER AL DÍA
+          </h3>
+          <span style={{ fontSize: '11px', fontWeight: '700', backgroundColor: '#EFEFEF', color: 'var(--gris-medio)', padding: '4px 10px', borderRadius: '12px' }}>
+            Ciclo 2026
+          </span>
         </div>
 
-        {showNoCreditsError && (
-          <div className="alert-banner danger animate-slide-up" style={{ marginBottom: '12px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <WarningAmberIcon style={{ fontSize: '18px' }} /> No tienes créditos disponibles. Podes renovarlos desde el botón "Comprar"
-            </span>
-          </div>
-        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gridTemplateRows: 'auto auto', gap: '12px' }}>
 
-        <div className="stats-dashboard-grid">
-          {/* Card Clases (Grande) */}
+          {/* Card Créditos (Izquierda - span 2 rows) */}
           <div
-            className="stat-card-modern stat-card-modern-large"
-            style={{
-              backgroundColor: 'var(--card-mustard)',
-              cursor: 'pointer',
-              transition: 'var(--transition-quick)'
-            }}
             onClick={() => {
               if (profile.classCredits > 0 && onGoToTurnos) {
                 onGoToTurnos();
@@ -95,54 +84,119 @@ export default function InicioTab({
                 setTimeout(() => setShowNoCreditsError(false), 5000);
               }
             }}
-          >
-            <div className="stat-card-modern-icon">
-              <span style={{ fontSize: '24px' }}>🎫</span>
-            </div>
-            <div className="stat-card-modern-content">
-              <div className="stat-card-modern-number">{profile.classCredits}</div>
-              <div className="stat-card-modern-label">Clases<br />disponibles</div>
-            </div>
-          </div>
-
-          {/* Card Arcilla */}
-          <div className="stat-card-modern" style={{ backgroundColor: 'var(--card-sage)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div className="stat-card-modern-content">
-                <div className="stat-card-modern-number">{profile.monthlyClayKg} <span style={{ fontSize: '14px', fontWeight: 600 }}>kg</span></div>
-                <div className="stat-card-modern-label">Arcilla<br />retirada</div>
-              </div>
-              <div className="stat-card-modern-icon" style={{ width: '40px', height: '40px' }}>
-                <span style={{ fontSize: '18px' }}>🏺</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card Deudas Pendientes */}
-          <div
-            className="stat-card-modern"
             style={{
-              backgroundColor: pendingDebt > 0 ? '#FFF7ED' : 'var(--blanco)',
-              color: 'var(--gris-oscuro)',
-              padding: '16px 20px',
-              cursor: pendingDebt > 0 ? 'pointer' : 'default',
-              transition: 'var(--transition-quick)'
+              backgroundColor: '#F7E7B8',
+              borderRadius: '28px',
+              padding: '20px',
+              gridRow: 'span 2',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.4), 0 8px 24px rgba(247,231,184,0.3)',
+              position: 'relative',
+              minHeight: '190px'
             }}
-            onClick={() => { if (pendingDebt > 0) setShowDebtsModal(true); }}
           >
-            <div className="stat-card-modern-content" style={{ justifyContent: 'center', height: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gris-medio)' }}>Deudas pendientes</span>
-                <span style={{ fontSize: '16px' }}>{pendingDebt > 0 ? '💸' : '✅'}</span>
+            {/* Top row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gris-oscuro)" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
               </div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: pendingDebt > 0 ? 'var(--rojo-alerta)' : 'var(--verde-oliva)' }}>
-                ${pendingDebt.toLocaleString('es-AR')}
-              </div>
-              <span style={{ fontSize: '10px', color: pendingDebt > 0 ? 'var(--rojo-alerta)' : 'var(--gris-medio)', marginTop: '8px', fontWeight: pendingDebt > 0 ? 800 : 600 }}>
-                {pendingDebt > 0 ? 'Aboná a la brevedad.' : 'Todo al día.'}
+              <span style={{ fontSize: '11px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.4)', padding: '6px 12px', borderRadius: '16px', color: 'var(--gris-oscuro)' }}>
+                CRÉDITOS
               </span>
             </div>
+
+            {/* Main content */}
+            <div style={{ marginTop: 'auto', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <span style={{ fontSize: '56px', fontWeight: 900, color: 'var(--gris-oscuro)', lineHeight: 1 }}>{profile.classCredits}</span>
+                <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>clases</span>
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gris-oscuro)', marginTop: '4px' }}>
+                Disponibles
+              </div>
+            </div>
+
+            {/* Bottom link */}
+            <div 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onGoToCreditos) onGoToCreditos();
+              }}
+              style={{ fontSize: '13px', fontWeight: 800, color: 'var(--gris-oscuro)', textDecoration: 'underline', textUnderlineOffset: '4px', cursor: 'pointer' }}
+            >
+              Ver historial →
+            </div>
           </div>
+
+          {/* Card Arcilla (Arriba Derecha) */}
+          <div style={{
+            backgroundColor: '#95B09E',
+            borderRadius: '28px',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2), 0 8px 24px rgba(149,176,158,0.3)',
+            color: 'var(--verde-oliva)',
+            minHeight: '120px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '12px', fontWeight: 900, letterSpacing: '0.5px' }}>ARCILLA</span>
+              <span style={{ fontSize: '20px' }}>🏺</span>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '36px', fontWeight: 900, lineHeight: 1 }}>{profile.monthlyClayKg}</span>
+                <span style={{ fontSize: '14px', fontWeight: 800 }}>kg retirados</span>
+              </div>
+              <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(15, 59, 50, 0.15)', borderRadius: '2px', marginTop: '8px' }}></div>
+            </div>
+          </div>
+
+          {/* Card Estado de Cuenta (Abajo Derecha) */}
+          <div
+            onClick={() => { if (pendingDebt > 0) setShowDebtsModal(true); }}
+            style={{
+              backgroundColor: 'var(--blanco)',
+              borderRadius: '28px',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+              cursor: pendingDebt > 0 ? 'pointer' : 'default',
+              border: pendingDebt > 0 ? '1px solid #FFEBEB' : 'none'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--gris-medio)', letterSpacing: '0.5px' }}>ESTADO DE CUENTA</span>
+              {pendingDebt === 0 && (
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#EAF2E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--verde-oliva)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+              <span style={{ fontSize: '28px', fontWeight: 900, color: pendingDebt > 0 ? 'var(--rojo-alerta)' : 'var(--gris-oscuro)', lineHeight: 1 }}>
+                ${pendingDebt.toLocaleString('es-AR')}
+              </span>
+              {pendingDebt === 0 ? (
+                <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#EAF2E8', color: 'var(--verde-oliva)', padding: '4px 10px', borderRadius: '12px' }}>
+                  ¡Al día! 🎉
+                </span>
+              ) : (
+                <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#FFEBEB', color: 'var(--rojo-alerta)', padding: '4px 10px', borderRadius: '12px' }}>
+                  Abonar
+                </span>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -172,13 +226,31 @@ export default function InicioTab({
 
       {/* Reservas Activas */}
       <div>
-        <h3 style={{ fontSize: '18px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          Mis reservas activas
-          <span className="badge badge-oliva">{myBookings.length}</span>
+        <h3 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--gris-medio)', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '0.5px', marginBottom: '16px', padding: '0 4px', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            MIS RESERVAS ACTIVAS
+          </div>
+          <span style={{ fontSize: '11px', fontWeight: '800', backgroundColor: '#95B09E', color: 'var(--blanco)', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
+            {myBookings.length}
+          </span>
         </h3>
         {myBookings.length === 0 ? (
-          <div className="clay-card" style={{ textAlign: 'center', padding: '24px 20px', color: 'var(--gris-medio)' }}>
-            <p style={{ fontSize: '14px', fontStyle: 'italic', margin: 0 }}>No tienes reservas activas.</p>
+          <div style={{
+            border: '2px dashed rgba(149, 176, 158, 0.4)',
+            borderRadius: '24px',
+            padding: '32px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(149, 176, 158, 0.05)',
+            gap: '12px'
+          }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: '#F7E7B8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--marron-arcilla)' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path><line x1="3" y1="3" x2="21" y2="21" strokeLinecap="round"></line></svg>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--gris-medio)', fontWeight: 600, margin: 0, textAlign: 'center' }}>No tienes reservas activas.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -278,61 +350,107 @@ export default function InicioTab({
         )}
       </div>
 
-      {/* Normas de convivencia */}
+      {/* Normas de convivencia (Carousel) */}
       {faqs && faqs.length > 0 && (
-        <div style={{ marginTop: '24px', backgroundColor: '#F8F9FA', borderRadius: '16px', padding: '20px' }}>
-          <div
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-            onClick={() => setIsNormasExpanded(!isNormasExpanded)}
-          >
-            <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+        <div style={{ marginTop: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '0 4px', flexWrap: 'wrap', gap: '12px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--gris-medio)', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '0.5px', margin: 0, textTransform: 'uppercase' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
               Normas de convivencia
             </h3>
-            <ExpandMoreIcon
-              style={{
-                color: 'var(--gris-medio)',
-                transform: isNormasExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease'
-              }}
-            />
+            
+            <div style={{ position: 'relative', width: '160px' }}>
+              <input
+                type="text"
+                placeholder="Buscar..."
+                value={faqSearch}
+                onChange={(e) => setFaqSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 12px 6px 32px',
+                  borderRadius: '16px',
+                  border: '1px solid #EAEAEA',
+                  backgroundColor: 'var(--blanco)',
+                  fontSize: '12px',
+                  outline: 'none',
+                  color: 'var(--gris-oscuro)',
+                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
+                }}
+              />
+              <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gris-medio)' }} width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
           </div>
 
-          {isNormasExpanded && (
-            <div style={{ marginTop: '16px', animation: 'fadeIn 0.2s ease-in-out' }}>
-              <p style={{ fontSize: '14px', color: '#718096', marginBottom: '16px', lineHeight: '1.5', marginTop: 0 }}>
-                Para mantener la armonía y cuidar las piezas de todos en el taller, recordá estas normas básicas:
-              </p>
+          <div 
+            style={{ 
+              display: 'flex', 
+              overflowX: 'auto', 
+              gap: '16px', 
+              paddingBottom: '16px', 
+              paddingInline: '4px',
+              scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none', // Firefox
+              msOverflowStyle: 'none', // IE and Edge
+            }}
+            className="hide-scrollbar"
+          >
+            {(() => {
+              const filtered = faqs.filter(faq => 
+                faq.question.toLowerCase().includes(faqSearch.toLowerCase()) || 
+                faq.answer.toLowerCase().includes(faqSearch.toLowerCase())
+              );
+              
+              if (filtered.length === 0) {
+                return (
+                  <div style={{ padding: '16px', color: 'var(--gris-medio)', fontSize: '13px', fontStyle: 'italic' }}>
+                    No se encontraron normas que coincidan con tu búsqueda.
+                  </div>
+                );
+              }
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {faqs.map((faq, idx) => (
-                  <div
-                    key={faq.id}
-                    style={{
-                      backgroundColor: 'var(--blanco)',
-                      borderRadius: '12px',
-                      padding: '16px',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+              return filtered.map((faq, idx) => {
+                const colors = [
+                  { bg: '#FDFCF6', iconBg: '#F7E7B8', border: '#EFEAE0' },
+                  { bg: '#F6F9F7', iconBg: '#E3EFDE', border: '#E2E8E4' },
+                  { bg: '#FEF8F7', iconBg: '#FCE0DB', border: '#F2E4E2' },
+                  { bg: '#F8F9FB', iconBg: '#E5EDF4', border: '#E6E9EE' },
+                ];
+                const color = colors[idx % colors.length];
+
+                return (
+                  <div 
+                    key={faq.id} 
+                    style={{ 
+                      minWidth: '260px', 
+                      maxWidth: '260px',
+                      backgroundColor: color.bg, 
+                      borderRadius: '24px', 
+                      padding: '20px', 
+                      scrollSnapAlign: 'start',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+                      border: `1px solid ${color.border}`,
                       display: 'flex',
-                      gap: '12px',
-                      alignItems: 'flex-start'
+                      flexDirection: 'column',
+                      gap: '12px'
                     }}
                   >
-                    <div style={{ marginTop: '2px' }}>
-                      {NORMAS_ICONS[idx % NORMAS_ICONS.length]}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '14px', backgroundColor: color.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {NORMAS_ICONS[idx % NORMAS_ICONS.length]}
+                      </div>
+                      <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: 0, lineHeight: 1.3, alignSelf: 'center' }}>
+                        {faq.question}
+                      </h4>
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '14px', fontWeight: 800, color: '#2D3748', marginRight: '4px' }}>
-                        {faq.question}:
-                      </span>
-                      <span style={{ fontSize: '14px', color: '#4A5568', lineHeight: '1.5' }}>
-                        {faq.answer}
-                      </span>
-                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--gris-medio)', margin: 0, lineHeight: 1.5, fontWeight: 500 }}>
+                      {faq.answer}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                );
+              });
+            })()}
+          </div>
         </div>
       )}
 

@@ -209,17 +209,62 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
       <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
         {/* Cabecera */}
-        {activeTab !== 'creditos' && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {activeTab === 'inicio' ? (
+          <div style={{
+            backgroundColor: '#FDFCF6',
+            border: '1px solid #EFEAE0',
+            borderRadius: '28px',
+            padding: '20px 24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '4px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+          }}>
             <div>
-              <span className="badge badge-clay" style={{ marginBottom: '6px' }}>
-                {currentUser?.genero === 'X' ? 'Alumn@ activ@' : (currentUser?.genero === 'F' ? 'Alumna activa' : 'Alumno activo')}
+              <span style={{ fontSize: '11px', fontWeight: 800, backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)', padding: '6px 12px', borderRadius: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--verde-oliva)' }}></div>
+                {currentUser?.genero === 'X' ? 'Alumn@ Activ@' : (currentUser?.genero === 'F' ? 'Alumna Activa' : 'Alumno Activo')} • {(currentUser?.sucursal || 'Centro').toUpperCase()}
               </span>
-              <h2 style={{ fontSize: '26px' }}>
-                {activeTab === 'inicio' ? `¡Hola, ${currentUser.name}!` : activeTab === 'turnos' ? 'Turnos' : 'Mi perfil'}
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--gris-oscuro)', margin: 0 }}>
+                ¡Hola, {currentUser.name}! ✨
               </h2>
             </div>
+            
+            <button
+              onClick={() => { setBuyStep(1); setShowBuyModal(true); }}
+              style={{
+                backgroundColor: '#E0BA72',
+                border: 'none',
+                borderRadius: '20px',
+                padding: '10px 18px',
+                color: 'var(--gris-oscuro)',
+                fontSize: '14px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 12px rgba(224, 186, 114, 0.4)'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
+              Comprar
+            </button>
           </div>
+        ) : (
+          activeTab !== 'creditos' && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span className="badge badge-clay" style={{ marginBottom: '6px' }}>
+                  {currentUser?.genero === 'X' ? 'Alumn@ activ@' : (currentUser?.genero === 'F' ? 'Alumna activa' : 'Alumno activo')}
+                </span>
+                <h2 style={{ fontSize: '26px' }}>
+                  {activeTab === 'turnos' ? 'Turnos' : 'Mi perfil'}
+                </h2>
+              </div>
+            </div>
+          )
         )}
 
         {activeTab === 'inicio' && (
@@ -242,6 +287,7 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
             }}
             onOpenBuyModal={() => { setBuyStep(1); setShowBuyModal(true); }}
             onGoToTurnos={() => { if (setActiveTab) setActiveTab('turnos'); }}
+            onGoToCreditos={() => { if (setActiveTab) setActiveTab('creditos'); }}
           />
         )}
 
