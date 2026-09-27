@@ -21,7 +21,7 @@ const TABS = [
 ];
 
 export default function AdminView({ activeTab = 'dashboard', setActiveTab = () => {} }) {
-  const { users, studentProfiles, classes, bookings, payments } = useApp();
+  const { users, studentProfiles, classes, bookings, payments, currentUser } = useApp();
 
   const [alertMsg, setAlertMsg]       = useState({ text: '', type: '' });
   const [editUserId, setEditUserId]   = useState(null); // null = modal cerrado
@@ -37,12 +37,57 @@ export default function AdminView({ activeTab = 'dashboard', setActiveTab = () =
   const openEdit  = (user) => setEditUserId(user.id);
   const closeEdit = ()     => setEditUserId(null);
 
+  const TAB_TITLES = {
+    students: 'Alumnas',
+    teachers: 'Profesores',
+    classes: 'Turnos',
+    payments: 'Pagos',
+    reports: 'Reportes',
+    config: 'Configuración',
+    perfil: 'Mi Perfil'
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {alertMsg.text && (
         <div className={`alert-banner ${alertMsg.type === 'danger' ? 'danger' : 'info'}`}>
           <span>{alertMsg.text}</span>
+        </div>
+      )}
+
+      {/* Modern Welcome Banner for Admin */}
+      {activeTab === 'dashboard' ? (
+        <div style={{
+          backgroundColor: '#F8F9FA',
+          borderRadius: '24px',
+          padding: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '4px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+        }}>
+          <div>
+            <span style={{ fontSize: '11px', fontWeight: 800, backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)', padding: '6px 12px', borderRadius: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--verde-oliva)' }}></div>
+              Panel de Administración
+            </span>
+            <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--gris-oscuro)', margin: 0 }}>
+              ¡Hola, {currentUser?.nombre || currentUser?.name || 'Admin'}! ✨
+            </h2>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span className="badge badge-clay" style={{ marginBottom: '6px', backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)' }}>
+              Panel de Administración
+            </span>
+            <h2 style={{ fontSize: '26px', margin: 0 }}>
+              {TAB_TITLES[activeTab] || 'Sección'}
+            </h2>
+          </div>
         </div>
       )}
 
