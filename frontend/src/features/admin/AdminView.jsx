@@ -57,7 +57,7 @@ export default function AdminView({ activeTab = 'dashboard', setActiveTab = () =
       )}
 
       {/* Modern Welcome Banner for Admin */}
-      {activeTab === 'dashboard' ? (
+      {activeTab === 'dashboard' && (
         <div style={{
           backgroundColor: '#F8F9FA',
           borderRadius: '24px',
@@ -75,17 +75,6 @@ export default function AdminView({ activeTab = 'dashboard', setActiveTab = () =
             </span>
             <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--gris-oscuro)', margin: 0 }}>
               ¡Hola, {currentUser?.nombre || currentUser?.name || 'Admin'}! ✨
-            </h2>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <span className="badge badge-clay" style={{ marginBottom: '6px', backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)' }}>
-              Panel de Administración
-            </span>
-            <h2 style={{ fontSize: '26px', margin: 0 }}>
-              {TAB_TITLES[activeTab] || 'Sección'}
             </h2>
           </div>
         </div>
