@@ -19,13 +19,16 @@ const allowedOrigins = [
   'http://localhost:3000'
 ].filter(Boolean);
 
+// Permite cualquier URL de preview/producción generada por Vercel para tu proyecto
+const isVercelPreview = (origin) =>
+  /^https:\/\/casatuti[a-z0-9-]*-espaciocreativo\.vercel\.app$/.test(origin);
+
 app.use(cors({
   origin: function (origin, callback) {
-    // Si no hay origin (por ejemplo peticiones del mismo servidor o herramientas como Postman), se permite
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isVercelPreview(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Bloqueado por política de CORS'));
+      callback(null, false);
     }
   },
   credentials: true
