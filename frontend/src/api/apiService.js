@@ -73,6 +73,15 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  grantBulkFreeCredits: async (studentIds, creditsToAdd) => {
+    const res = await fetch(`${API_URL}/students/bulk-free-credits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentIds, creditsToAdd })
+    });
+    return handleResponse(res);
+  },
+
   login: async (email, password) => {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',

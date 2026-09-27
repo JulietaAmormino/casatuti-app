@@ -1983,6 +1983,41 @@ app.post('/api/payments', async (req, res) => {
   }
 });
 
+// Otorgar créditos gratis a múltiples alumnas
+app.post('/api/students/bulk-free-credits', async (req, res) => {
+  const { studentIds, creditsToAdd } = req.body;
+
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0 || !creditsToAdd) {
+    return res.status(400).json({ error: 'Faltan parámetros (studentIds array, creditsToAdd).' });
+  }
+
+  const paymentDate = new Date().toISOString();
+
+  try {
+    for (const sId of studentIds) {
+      const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [sId]);
+      if (profileRes.rows.length === 0) continue;
+
+      // 1. Insertar en t_historial_creditos para registro (monto 0)
+      await db.query(
+        `INSERT INTO public.t_historial_creditos (id_usuarios, cantidad, motivo, fec_movimiento, estado, monto)
+         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'PAID', 0)`,
+        [sId, creditsToAdd, paymentDate]
+      );
+
+      // 2. Acreditar créditos en t_cuenta_alumno
+      await db.query(
+        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+        [creditsToAdd, sId]
+      );
+    }
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Error al otorgar créditos gratis:', error);
+    res.status(500).json({ error: 'Error al otorgar los créditos gratis.' });
+  }
+});
+
 
 // ==========================================
 // 8. ENDPOINTS DE ALERTAS
