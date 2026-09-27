@@ -7,6 +7,9 @@ import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SettingsIcon from '@mui/icons-material/Settings';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+import CakeIcon from '@mui/icons-material/Cake';
 import { formatDateDDMMYYYY } from '../../../utils/dateUtils';
 
 export default function DashboardTab({ classes, bookings, students, studentProfiles, payments, setAdminTab, navigateToStudents }) {
@@ -102,27 +105,23 @@ export default function DashboardTab({ classes, bookings, students, studentProfi
   return (
     <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <h2 style={{ fontSize: '26px', fontWeight: 800, fontFamily: 'var(--font-sans)', marginBottom: '4px', color: 'var(--gris-oscuro)' }}>
-            Panel de administración
-          </h2>
-        </div>
 
         {/* Filtro por Sucursal (Pills) */}
-        <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-crema-claro)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--gris-claro)', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', gap: '8px', backgroundColor: '#F0EEE1', padding: '6px', borderRadius: '24px', overflowX: 'auto', width: '100%' }}>
           <button
             onClick={() => setSelectedBranch('ALL')}
             style={{
-              padding: '8px 16px',
-              borderRadius: 'var(--radius-sm)',
+              padding: '10px 24px',
+              borderRadius: '20px',
               border: 'none',
-              fontSize: '12px',
-              fontWeight: '700',
+              fontSize: '14px',
+              fontWeight: '800',
               cursor: 'pointer',
-              backgroundColor: selectedBranch === 'ALL' ? 'var(--verde-oliva)' : 'transparent',
-              color: selectedBranch === 'ALL' ? 'var(--blanco)' : 'var(--gris-medio)',
+              backgroundColor: selectedBranch === 'ALL' ? '#879C8A' : 'transparent',
+              color: selectedBranch === 'ALL' ? '#FFF' : 'var(--gris-oscuro)',
               transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              flex: selectedBranch === 'ALL' ? 'none' : '1'
             }}
           >
             Todas
@@ -134,16 +133,17 @@ export default function DashboardTab({ classes, bookings, students, studentProfi
                 key={branch.id}
                 onClick={() => setSelectedBranch(branch.name)}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 24px',
+                  borderRadius: '20px',
                   border: 'none',
-                  fontSize: '12px',
-                  fontWeight: '700',
+                  fontSize: '14px',
+                  fontWeight: '800',
                   cursor: 'pointer',
-                  backgroundColor: isActive ? 'var(--verde-oliva)' : 'transparent',
-                  color: isActive ? 'var(--blanco)' : 'var(--gris-medio)',
+                  backgroundColor: isActive ? '#879C8A' : 'transparent',
+                  color: isActive ? '#FFF' : 'var(--gris-oscuro)',
                   transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flex: isActive ? 'none' : '1'
                 }}
               >
                 {branch.name}
@@ -156,50 +156,82 @@ export default function DashboardTab({ classes, bookings, students, studentProfi
       {/* Stats 2x2 Masonry-like Grid */}
       <div className="stats-dashboard-grid">
         {/* Card 1: Large (Turnos Hoy) */}
-        <div className="stat-card-modern stat-card-modern-large" style={{ backgroundColor: 'var(--card-mustard)' }} onClick={() => setAdminTab('classes')}>
-          <div className="stat-card-modern-icon">
-            <EventIcon style={{ fontSize: '28px', color: '#fff' }} />
+        <div className="stat-card-modern stat-card-modern-large" style={{ backgroundColor: '#F9E4B7', color: 'var(--gris-oscuro)', boxShadow: '0 8px 24px rgba(249,228,183,0.4)', borderRadius: '32px' }} onClick={() => setAdminTab('classes')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '44px', height: '44px', 
+              border: '1px solid rgba(0,0,0,0.05)',
+              borderRadius: '14px',
+              display: 'flex', justifyContent: 'center', alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.3)'
+            }}>
+              <EventIcon style={{ fontSize: '22px', color: 'var(--gris-oscuro)' }} />
+            </div>
+            <span style={{ backgroundColor: 'rgba(255,255,255,0.7)', padding: '4px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: 800 }}>HOY</span>
           </div>
-          <div className="stat-card-modern-content">
-            <div className="stat-card-modern-number">{turnosHoyCount}</div>
-            <div className="stat-card-modern-label">Turnos hoy</div>
+
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ fontSize: '56px', fontWeight: 900, letterSpacing: '-2px', lineHeight: 1 }}>{turnosHoyCount}</span>
+              <span style={{ fontSize: '18px', fontWeight: 800 }}>turnos</span>
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '4px', opacity: 0.85 }}>Agendados para hoy</div>
+            <div style={{ fontSize: '14px', fontWeight: 900, textDecoration: 'underline', textUnderlineOffset: '4px', marginTop: '20px', cursor: 'pointer' }}>
+              Ver agenda →
+            </div>
           </div>
         </div>
 
         {/* Card 2: Top Right (Alumnos) */}
-        <div className="stat-card-modern" style={{ backgroundColor: 'var(--card-rust)' }} onClick={() => setAdminTab('students')}>
+        <div className="stat-card-modern" style={{ backgroundColor: '#D98361', padding: '24px', boxShadow: '0 8px 24px rgba(217,131,97,0.3)', borderRadius: '32px' }} onClick={() => setAdminTab('students')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div className="stat-card-modern-content">
-              <div className="stat-card-modern-number">{alumnosCount}</div>
-              <div className="stat-card-modern-label">Alumnos</div>
+            <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF' }}>COMUNIDAD</div>
+            <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <GroupIcon style={{ fontSize: '20px', color: '#fff' }} />
             </div>
-            <div className="stat-card-modern-icon" style={{ width: '40px', height: '40px' }}>
-              <GroupIcon style={{ fontSize: '22px', color: '#fff' }} />
+          </div>
+          
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', color: '#FFF' }}>
+              <span style={{ fontSize: '38px', fontWeight: 900, lineHeight: 1 }}>{alumnosCount}</span>
+              <span style={{ fontSize: '14px', fontWeight: 700 }}>activos</span>
             </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'rgba(255,255,255,0.9)' }}>Alumnos inscriptos</div>
           </div>
         </div>
 
         {/* Card 3: Bottom Right (Paquetes activos) */}
-        <div className="stat-card-modern" style={{ backgroundColor: 'var(--card-olive)' }} onClick={() => navigateToStudents ? navigateToStudents('ACTIVE_PACKS') : setAdminTab('students')}>
+        <div className="stat-card-modern" style={{ backgroundColor: '#879C8A', padding: '24px', boxShadow: '0 8px 24px rgba(135,156,138,0.3)', borderRadius: '32px' }} onClick={() => navigateToStudents ? navigateToStudents('ACTIVE_PACKS') : setAdminTab('students')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div className="stat-card-modern-content">
-              <div className="stat-card-modern-number">{paquetesActivos}</div>
-              <div className="stat-card-modern-label" style={{ opacity: 0.85 }}>Packs activos</div>
+            <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF' }}>CRÉDITOS</div>
+            <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <CreditCardIcon style={{ fontSize: '20px', color: '#fff' }} />
             </div>
-            <div className="stat-card-modern-icon" style={{ width: '40px', height: '40px' }}>
-              <CreditCardIcon style={{ fontSize: '22px', color: '#fff' }} />
+          </div>
+          
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', color: '#FFF' }}>
+              <span style={{ fontSize: '38px', fontWeight: 900, lineHeight: 1 }}>{paquetesActivos}</span>
+              <span style={{ fontSize: '14px', fontWeight: 700 }}>packs</span>
             </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'rgba(255,255,255,0.9)' }}>Packs vigentes</div>
           </div>
         </div>
 
         {/* Card 4: Full Width Bottom (Deuda total) */}
-        <div className="stat-card-modern" style={{ backgroundColor: 'var(--card-sage)', gridColumn: 'span 2', flexDirection: 'row', alignItems: 'center' }} onClick={() => setAdminTab('payments')}>
-          <div className="stat-card-modern-icon" style={{ width: '48px', height: '48px' }}>
-            <WaterDropIcon style={{ fontSize: '26px', color: '#fff' }} />
+        <div className="stat-card-modern" style={{ backgroundColor: '#9AB29D', gridColumn: 'span 2', flexDirection: 'row', alignItems: 'center', padding: '24px', boxShadow: '0 8px 24px rgba(154,178,157,0.3)', borderRadius: '32px' }} onClick={() => setAdminTab('payments')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+            <div style={{ width: '56px', height: '56px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <AccountBalanceWalletIcon style={{ fontSize: '28px', color: '#fff' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF', marginBottom: '4px', opacity: 0.9 }}>FINANZAS AL DÍA</div>
+              <div style={{ fontSize: '34px', fontWeight: 900, lineHeight: 1, marginBottom: '6px', color: '#FFF' }}>${deudaTotal.toLocaleString('es-AR')}</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>Deuda total calculada en pendientes</div>
+            </div>
           </div>
-          <div className="stat-card-modern-content" style={{ flex: 1, textAlign: 'right' }}>
-            <div className="stat-card-modern-number">${deudaTotal.toLocaleString('es-AR')}</div>
-            <div className="stat-card-modern-label" style={{ opacity: 0.85 }}>Deuda total calculada</div>
+          <div style={{ width: '36px', height: '36px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <span style={{ color: '#fff', fontWeight: 800, fontSize: '20px', lineHeight: 1, paddingBottom: '2px' }}>›</span>
           </div>
         </div>
       </div>
@@ -238,39 +270,88 @@ export default function DashboardTab({ classes, bookings, students, studentProfi
         </>
       )}
 
-      {/* Alertas de alumnas: Créditos y vencimientos */}
-      <div className="dashboard-section-header" style={{ marginTop: '16px', marginBottom: '8px' }}>
-        <span className="dashboard-section-title">Alertas y vencimientos</span>
+      {/* Alertas y vencimientos modernos */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', marginBottom: '12px', padding: '0 4px' }}>
+        <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gris-medio)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <NotificationsNoneIcon style={{ fontSize: '18px' }} /> ALERTAS Y VENCIMIENTOS
+        </span>
+        <button style={{ background: 'none', border: 'none', color: 'var(--verde-oliva)', fontWeight: 800, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          + Nueva alerta
+        </button>
       </div>
-      <details className="stat-card-modern" style={{ padding: '0', overflow: 'hidden', marginTop: '0', backgroundColor: 'var(--blanco)', border: 'none', borderRadius: '24px', color: 'var(--gris-oscuro)' }} open>
-        <summary style={{ padding: '16px', fontWeight: 700, fontSize: '16px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', color: 'var(--gris-oscuro)' }}>
-          <WarningAmberIcon style={{ color: 'var(--rojo-alerta)' }} /> Detalle de alertas
-        </summary>
-        <div style={{ padding: '0 16px 16px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
 
-          {/* Alumnas con 1 crédito */}
-          <div style={{ backgroundColor: 'var(--blanco)', border: '1px solid var(--gris-claro)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '36px', fontWeight: 900, color: 'var(--amarillo-alerta)', lineHeight: 1 }}>{alumnasConUnCredito}</span>
-            <span style={{ fontSize: '13px', color: 'var(--gris-oscuro)', fontWeight: 600, marginTop: '8px' }}>Alumnas con 1 crédito</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
+        {/* Alerta: 1 crédito */}
+        {alumnasConUnCredito > 0 && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', backgroundColor: '#F9E4B7', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <WarningAmberIcon style={{ fontSize: '24px', color: '#D99F45' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>{alumnasConUnCredito} alumnas con 1 crédito</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--gris-medio)' }}>Revisar y ofrecer packs</div>
+              </div>
+            </div>
+            <span style={{ backgroundColor: '#F9E4B7', color: '#D99F45', padding: '6px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 800 }}>Urgente</span>
           </div>
+        )}
 
-          {/* Pagos pendientes */}
-          <div
-            onClick={() => setAdminTab('payments')}
-            style={{ backgroundColor: 'var(--blanco)', border: '1px solid var(--gris-claro)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'var(--transition-smooth)' }}
-          >
-            <span style={{ fontSize: '36px', fontWeight: 900, color: 'var(--rojo-alerta)', lineHeight: 1 }}>{pendingPaymentsCount}</span>
-            <span style={{ fontSize: '13px', color: 'var(--gris-oscuro)', fontWeight: 600, marginTop: '8px' }}>Pagos por confirmar</span>
+        {/* Alerta: Pagos pendientes */}
+        {pendingPaymentsCount > 0 && (
+          <div onClick={() => setAdminTab('payments')} style={{ cursor: 'pointer', backgroundColor: '#fff', borderRadius: '20px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', backgroundColor: '#F0D4D4', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <AccountBalanceWalletIcon style={{ fontSize: '24px', color: '#C86E6E' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>{pendingPaymentsCount} pagos por confirmar</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--gris-medio)' }}>Transferencias o efectivos</div>
+              </div>
+            </div>
+            <span style={{ backgroundColor: '#F0D4D4', color: '#C86E6E', padding: '6px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 800 }}>Pendiente</span>
           </div>
+        )}
 
-          {/* Alumnas con vencimiento cercano (<= 7 días) */}
-          <div style={{ backgroundColor: 'var(--blanco)', border: '1px solid var(--gris-claro)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '36px', fontWeight: 900, color: 'var(--rojo-alerta)', lineHeight: 1 }}>{proximosVencimientosCount}</span>
-            <span style={{ fontSize: '13px', color: 'var(--gris-oscuro)', fontWeight: 600, marginTop: '8px' }}>Vencimientos próximos</span>
+        {/* Alerta: Vencimientos */}
+        {proximosVencimientosCount > 0 && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', backgroundColor: '#F9E4B7', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <EventIcon style={{ fontSize: '24px', color: '#D99F45' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>{proximosVencimientosCount} packs próximos a vencer</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--gris-medio)' }}>En los próximos 7 días</div>
+              </div>
+            </div>
+            <span style={{ backgroundColor: '#F9E4B7', color: '#D99F45', padding: '6px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 800 }}>Revisar</span>
           </div>
+        )}
 
-        </div>
-      </details>
+        {/* Alerta: Cumpleaños */}
+        {birthdaysThisMonth.length > 0 && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', backgroundColor: '#E3EFDE', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <CakeIcon style={{ fontSize: '24px', color: 'var(--verde-oliva)' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>{birthdaysThisMonth.length} cumpleaños este mes</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--gris-medio)' }}>Festejos próximos</div>
+              </div>
+            </div>
+            <span style={{ backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)', padding: '6px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 800 }}>Festejo</span>
+          </div>
+        )}
+
+        {/* Si no hay alertas */}
+        {alumnasConUnCredito === 0 && pendingPaymentsCount === 0 && proximosVencimientosCount === 0 && birthdaysThisMonth.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '32px 16px', backgroundColor: 'transparent' }}>
+            <span style={{ fontSize: '14px', color: 'var(--gris-medio)', fontWeight: 600 }}>No hay alertas pendientes hoy ✨</span>
+          </div>
+        )}
+      </div>
 
       {/* Botón/Card de reportes */}
       <div
