@@ -19,13 +19,16 @@ const allowedOrigins = [
   'http://localhost:3000'
 ].filter(Boolean);
 
+// Permite cualquier URL de preview/producción generada por Vercel para tu proyecto
+const isVercelPreview = (origin) =>
+  /^https:\/\/casatuti[a-z0-9-]*-espaciocreativo\.vercel\.app$/.test(origin);
+
 app.use(cors({
   origin: function (origin, callback) {
-    // Si no hay origin (por ejemplo peticiones del mismo servidor o herramientas como Postman), se permite
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isVercelPreview(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Bloqueado por política de CORS'));
+      callback(null, false);
     }
   },
   credentials: true
@@ -1983,6 +1986,41 @@ app.post('/api/payments', async (req, res) => {
   }
 });
 
+// Otorgar créditos gratis a múltiples alumnas
+app.post('/api/students/bulk-free-credits', async (req, res) => {
+  const { studentIds, creditsToAdd } = req.body;
+
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0 || !creditsToAdd) {
+    return res.status(400).json({ error: 'Faltan parámetros (studentIds array, creditsToAdd).' });
+  }
+
+  const paymentDate = new Date().toISOString();
+
+  try {
+    for (const sId of studentIds) {
+      const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [sId]);
+      if (profileRes.rows.length === 0) continue;
+
+      // 1. Insertar en t_historial_creditos para registro (monto 0)
+      await db.query(
+        `INSERT INTO public.t_historial_creditos (id_usuarios, cantidad, motivo, fec_movimiento, estado, monto)
+         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'PAID', 0)`,
+        [sId, creditsToAdd, paymentDate]
+      );
+
+      // 2. Acreditar créditos en t_cuenta_alumno
+      await db.query(
+        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+        [creditsToAdd, sId]
+      );
+    }
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Error al otorgar créditos gratis:', error);
+    res.status(500).json({ error: 'Error al otorgar los créditos gratis.' });
+  }
+});
+
 
 // ==========================================
 // 8. ENDPOINTS DE ALERTAS
@@ -2563,11 +2601,12 @@ app.delete('/api/faqs/:id', async (req, res) => {
 // ==========================================
 // INICIAR SERVIDOR
 // ==========================================
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
-  });
-}
+// Comentado para Vercel: el servidor no debe escuchar en un puerto en Serverless
+// if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+//   app.listen(PORT, () => {
+//     console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+//   });
+// }
 
 // ==========================================
 // PUSH NOTIFICATIONS ENDPOINT
@@ -2599,7 +2638,7 @@ app.post('/api/push/subscribe', async (req, res) => {
 // ==========================================
 // BACKGROUND JOBS
 // ==========================================
-const runExpirationJob = async () => {
+export const runExpirationJob = async () => {
   try {
     console.log('[Job] Corriendo verificación de vencimientos de créditos...');
     const usersRes = await db.query('SELECT id_usuarios, saldo_actual FROM public.t_cuenta_alumno WHERE saldo_actual > 0');
@@ -2669,10 +2708,11 @@ const runExpirationJob = async () => {
 };
 
 // Ejecutar al iniciar el servidor (localmente)
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
-  setTimeout(runExpirationJob, 5000);
-  // Ejecutar cada 1 hora
-  setInterval(runExpirationJob, 60 * 60 * 1000);
-}
+// Comentado para Vercel: Serverless functions no pueden mantener setIntervals
+// if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+//   setTimeout(runExpirationJob, 5000);
+//   // Ejecutar cada 1 hora
+//   setInterval(runExpirationJob, 60 * 60 * 1000);
+// }
 
 export default app;
