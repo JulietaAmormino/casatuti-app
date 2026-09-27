@@ -21,14 +21,14 @@ const allowedOrigins = [
 
 // Permite cualquier URL de preview/producción generada por Vercel para tu proyecto
 const isVercelPreview = (origin) =>
-  /^https:\/\/casatuti[a-z0-9-]*-julietaamorminos-projects\.vercel\.app$/.test(origin);
+  /^https:\/\/casatuti[a-z0-9-]*-espaciocreativo\.vercel\.app$/.test(origin);
 
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin) || isVercelPreview(origin)) {
       callback(null, true);
     } else {
-      callback(null, false); // Rechaza sin explotar la función (nunca más un 500 por esto)
+      callback(null, false);
     }
   },
   credentials: true
