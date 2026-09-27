@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { Select, MenuItem, Checkbox, ListItemText, OutlinedInput } from '@mui/material';
 export default function EditUserModal({ userId, onClose, showFeedback }) {
-  const { users, updateUserAction, branches } = useApp();
+  const { users, updateUserAction, updateUserSecondaryRole, branches } = useApp();
   const user = users.find(u => u.id === userId);
   const isTeacher = user?.role === 'PROFE';
 
@@ -15,9 +15,25 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
   const [telefono, setTelefono]   = useState(user?.telefono || '');
   const [instagram, setInstagram] = useState(user?.instagram || '');
   const [birthdate, setBirthdate] = useState((user?.fecha_nacimiento || '').split('T')[0] || '');
+  const [genero, setGenero]       = useState(user?.genero || 'F');
+  const [secondaryRole, setSecondaryRole] = useState(user?.secondaryRole || '');
   const [selectedBranches, setSelectedBranches] = useState(
-    user?.sucursal ? user.sucursal.split(',').map(s => s.trim()) : (branches.length > 0 ? [branches[0].name] : ['CENTRO'])
+    user?.sucursal ? user.sucursal.split(',').map(s => s.trim().toUpperCase()) : (branches.length > 0 ? [branches[0].name.toUpperCase()] : ['CENTRO'])
   );
+
+  const getTitle = () => {
+    if (isTeacher) {
+      if (genero === 'F') return 'Modificar profesora';
+      if (genero === 'M') return 'Modificar profesor';
+      if (genero === 'X') return 'Modificar profesor@';
+      return 'Modificar profesor/a';
+    } else {
+      if (genero === 'F') return 'Modificar alumna';
+      if (genero === 'M') return 'Modificar alumno';
+      if (genero === 'X') return 'Modificar alumn@';
+      return 'Modificar alumno/a';
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,9 +49,14 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
         telefono: telefono || null,
         instagram: instagram.trim() || null,
         fecha_nacimiento: birthdate || null,
-        sucursal: selectedBranches.join(', ')
+        sucursal: selectedBranches.join(', '),
+        genero: genero || 'F'
       });
-      showFeedback(isTeacher ? '¡Profesor/a modificado con éxito!' : '¡Alumna modificada con éxito!', 'info');
+      if (updateUserSecondaryRole && secondaryRole !== (user?.secondaryRole || '')) {
+        await updateUserSecondaryRole(userId, secondaryRole === '' ? null : secondaryRole);
+      }
+      const p = genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a';
+      showFeedback(isTeacher ? `¡Profesor${genero==='M'?'':(genero==='X'?'@':'a')} modificad${p} con éxito!` : `¡Alumn${p} modificad${p} con éxito!`, 'info');
       onClose();
     } catch (err) {
       showFeedback(err.message, 'danger');
@@ -57,9 +78,16 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3 style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--font-serif)', margin: 0 }}>
-            {isTeacher ? 'Modificar Profesor/a' : 'Modificar alumno/a'}
+            {getTitle()}
           </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--gris-medio)' }}>✕</button>
+          <button 
+            onClick={onClose} 
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--gris-medio)' }}
+          >
+            <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -92,6 +120,14 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
             <input type="date" className="input-tuti" value={birthdate} onChange={e => setBirthdate(e.target.value)} style={{ width: '100%' }} />
           </div>
           <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Género *</label>
+            <select className="input-tuti" value={genero} onChange={e => setGenero(e.target.value)} required style={{ width: '100%', cursor: 'pointer' }}>
+              <option value="F">Femenino</option>
+              <option value="M">Masculino</option>
+              <option value="X">No binario</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Sucursal{isTeacher && 'es'}</label>
             {isTeacher ? (
               <>
@@ -105,11 +141,11 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
                       if (selectedBranches.length === branches.length) {
                         setSelectedBranches([]);
                       } else {
-                        setSelectedBranches(branches.map(b => b.name));
+                        setSelectedBranches(branches.map(b => b.name.toUpperCase()));
                       }
                       return;
                     }
-                    setSelectedBranches(typeof value === 'string' ? value.split(',') : value);
+                    setSelectedBranches(typeof value === 'string' ? value.split(',').map(v => v.trim().toUpperCase()) : value.map(v => v.toUpperCase()));
                   }} 
                   input={<OutlinedInput />}
                   renderValue={(selected) => {
@@ -147,20 +183,32 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
                     <ListItemText primary="Seleccionar todas" primaryTypographyProps={{ fontSize: '14px', fontWeight: '700', color: 'var(--gris-oscuro)' }} />
                   </MenuItem>
                   {branches.map(b => (
-                    <MenuItem key={b.id} value={b.name} style={{ fontSize: '14px' }}>
-                      <Checkbox checked={selectedBranches.indexOf(b.name) > -1} size="small" sx={{ color: 'var(--gris-medio)', '&.Mui-checked': { color: 'var(--verde-oliva)' } }} />
-                      <ListItemText primary={b.name} primaryTypographyProps={{ fontSize: '14px', fontWeight: '500', color: 'var(--gris-oscuro)' }} />
+                    <MenuItem key={b.id} value={b.name.toUpperCase()} style={{ fontSize: '14px' }}>
+                      <Checkbox 
+                        checked={selectedBranches.indexOf(b.name.toUpperCase()) > -1} 
+                        size="small"
+                        sx={{ color: 'var(--gris-claro)', '&.Mui-checked': { color: 'var(--verde-oliva)' } }}
+                      />
+                      <ListItemText primary={b.name} primaryTypographyProps={{ fontSize: '14px', color: 'var(--gris-oscuro)' }} />
                     </MenuItem>
                   ))}
                 </Select>
               </>
             ) : (
-              <select className="input-tuti" value={selectedBranches[0] || ''} onChange={e => setSelectedBranches([e.target.value])} style={{ width: '100%', cursor: 'pointer' }}>
+              <select className="input-tuti" value={selectedBranches[0] || 'CENTRO'} onChange={e => setSelectedBranches([e.target.value.toUpperCase()])} style={{ width: '100%', cursor: 'pointer' }}>
                 {branches.map(b => (
-                  <option key={b.id} value={b.name}>{b.name}</option>
+                  <option key={b.id} value={b.name.toUpperCase()}>{b.name}</option>
                 ))}
               </select>
             )}
+          </div>
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Rol Secundario</label>
+            <select className="input-tuti" value={secondaryRole} onChange={e => setSecondaryRole(e.target.value)} style={{ width: '100%', cursor: 'pointer' }}>
+              <option value="">Ninguno</option>
+              <option value="PROFE">PROFE (Profesor)</option>
+              <option value="ADMIN">ADMIN (Administrador)</option>
+            </select>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <button type="button" onClick={onClose} className="btn-tuti btn-danger-soft" style={{ flex: 1, padding: '12px' }}>Cancelar</button>

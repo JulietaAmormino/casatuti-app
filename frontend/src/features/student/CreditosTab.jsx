@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import { formatDateDDMMYYYY } from '../../utils/dateUtils';
 
 export default function CreditosTab({
   currentUser,
@@ -14,6 +15,7 @@ export default function CreditosTab({
   buyLoading,
   onBuy,
   payments = [],
+  bakes = [],
   isModal = false,
 }) {
   const [payingDebt, setPayingDebt] = useState(null);
@@ -170,7 +172,7 @@ export default function CreditosTab({
 
             <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <a
-                href="https://wa.me/5493517371575?text=Hola,%20acabo%20de%20realizar%20una%20transferencia%20para%20comprar%20clases."
+                href="https://wa.me/5493541591817?text=Hola,%20acabo%20de%20realizar%20una%20transferencia%20para%20comprar%20clases."
                 target="_blank"
                 rel="noreferrer"
                 className="btn-tuti"
@@ -197,10 +199,10 @@ export default function CreditosTab({
         <div style={{ backgroundColor: '#FFF7ED', padding: '24px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.02)' }}>
           <p style={{ fontSize: '13px', color: 'var(--gris-medio)', marginBottom: '4px' }}>Total a transferir:</p>
           <p style={{ fontSize: '32px', fontWeight: 800, color: '#CC7A42', margin: 0 }}>
-            ${Number(payingDebt.amount).toLocaleString('es-AR')}
+            ${Number(payingDebt.amount || payingDebt.price).toLocaleString('es-AR')}
           </p>
           <p style={{ fontSize: '13px', color: '#CC7A42', marginTop: '8px', fontWeight: 'bold' }}>
-            Por el Pack de {payingDebt.creditsAdded} Clases
+            {payingDebt.creditsAdded ? `Por el Pack de ${payingDebt.creditsAdded} Clases` : `Por ${payingDebt.description}`}
           </p>
         </div>
 
@@ -221,7 +223,11 @@ export default function CreditosTab({
 
         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <a
-            href="https://wa.me/5493517371575?text=Hola,%20acabo%20de%20realizar%20la%20transferencia%20para%20pagar%20mi%20deuda%20de%20clases."
+            href={`https://wa.me/5493541591817?text=${encodeURIComponent(
+              payingDebt.creditsAdded 
+                ? 'Hola, acabo de realizar la transferencia para pagar mi deuda de clases.' 
+                : `Hola, acabo de realizar la transferencia para pagar mi deuda de insumos (${payingDebt.description}).`
+            )}`}
             target="_blank"
             rel="noreferrer"
             className="btn-tuti"
@@ -245,7 +251,7 @@ export default function CreditosTab({
       <h2 style={{ fontSize: '28px', color: 'var(--gris-oscuro)', letterSpacing: '-0.5px' }}>Pagos y créditos</h2>
 
       {/* SECCIÓN DE DEUDAS PENDIENTES */}
-      {myPendingPayments.length > 0 && (
+      {(myPendingPayments.length > 0 || (bakes || []).filter(b => b.studentId == currentUser.id && !b.isPaid && b.price > 0).length > 0) && (
         <div>
           <h4 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--gris-medio)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>
             Deudas pendientes
@@ -299,8 +305,54 @@ export default function CreditosTab({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--gris-medio)' }}>
                   <CalendarTodayIcon style={{ fontSize: '14px' }} />
                   <span style={{ fontSize: '12px' }}>
-                    Registrado: {p.date ? getDateObj(p.date).toLocaleDateString('es-AR') : 'Fecha desconocida'}
+                    Registrado: {p.date ? formatDateDDMMYYYY(p.date) : 'Fecha desconocida'}
                   </span>
+                </div>
+              </div>
+            ))}
+            {(bakes || []).filter(b => b.studentId == currentUser.id && !b.isPaid && b.price > 0).map((b, idx) => (
+              <div
+                key={`bake-${idx}`}
+                style={{
+                  padding: '16px 20px',
+                  borderRadius: '24px',
+                  backgroundColor: 'var(--blanco)',
+                  border: '2px solid #FFF1E5',
+                  boxShadow: '0 4px 16px rgba(204,122,66,0.05)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <span style={{
+                      fontSize: '10px', fontWeight: 800, color: '#CC7A42',
+                      backgroundColor: '#FFF7ED', padding: '4px 8px', borderRadius: '8px',
+                      textTransform: 'uppercase', display: 'inline-block', marginBottom: '8px'
+                    }}>
+                      Deuda de Insumos
+                    </span>
+                    <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: 0 }}>
+                      {(b.description || 'Insumo').charAt(0).toUpperCase() + (b.description || 'Insumo').slice(1).toLowerCase()}
+                    </h3>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: '#CC7A42', display: 'block' }}>
+                      ${Number(b.price).toLocaleString('es-AR')}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--gris-medio)' }}>
+                      {formatDateDDMMYYYY(b.date || new Date())}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ borderTop: '1px solid var(--gris-claro)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setPayingDebt(b)}
+                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--marron-arcilla)', fontSize: '14px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    Pagar {'>'}
+                  </button>
                 </div>
               </div>
             ))}
@@ -348,7 +400,7 @@ export default function CreditosTab({
                     backgroundColor: 'var(--bg-crema)', padding: '6px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600
                   }}>
                     <CalendarTodayIcon style={{ fontSize: '14px', color: 'var(--gris-medio)' }} />
-                    {pack.buyDate ? `Inicia: ${pack.buyDate.toLocaleDateString('es-AR')}` : 'Fecha: No registrada'}
+                    {pack.buyDate ? `Inicia: ${formatDateDDMMYYYY(pack.buyDate)}` : 'Fecha: No registrada'}
                   </div>
 
                   <div style={{
@@ -356,7 +408,7 @@ export default function CreditosTab({
                     backgroundColor: '#FFFBEA', padding: '6px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 700
                   }}>
                     <HourglassEmptyIcon style={{ fontSize: '14px' }} />
-                    {pack.expDate ? `Vence: ${pack.expDate.toLocaleDateString('es-AR')}` : 'Vence: A confirmar'}
+                    {pack.expDate ? `Vence: ${formatDateDDMMYYYY(pack.expDate)}` : 'Vence: A confirmar'}
                   </div>
                 </div>
               </div>

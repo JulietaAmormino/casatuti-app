@@ -17,14 +17,16 @@ export default function ProfeView({ activeTab, setActiveTab }) {
     deliverClayToStudent,
     createBake,
     createExtraClay,
-    bookClassForStudent
+    bookClassForStudent,
+    requestClassPauseAction,
+    cancelBooking
   } = useApp();
 
   const [selectedBranch, setSelectedBranch] = useState('ALL');
 
   // Determinar sucursales del profe basadas en sus clases
   const myBranches = useMemo(() => {
-    const teacherClasses = classes.filter(c => c.teacherId === currentUser.id);
+    const teacherClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
     return [...new Set(teacherClasses.map(c => c.sucursal).filter(Boolean))];
   }, [classes, currentUser.id]);
 
@@ -54,6 +56,9 @@ export default function ProfeView({ activeTab, setActiveTab }) {
             takeAttendance={takeAttendance}
             deliverClayToStudent={deliverClayToStudent}
             bookClassForStudent={bookClassForStudent}
+            createBake={createBake}
+            createExtraClay={createExtraClay}
+            cancelBooking={cancelBooking}
             setActiveTab={setActiveTab}
           />
         );
@@ -67,6 +72,9 @@ export default function ProfeView({ activeTab, setActiveTab }) {
             takeAttendance={takeAttendance}
             deliverClayToStudent={deliverClayToStudent}
             createBake={createBake}
+            createExtraClay={createExtraClay}
+            requestClassPauseAction={requestClassPauseAction}
+            cancelBooking={cancelBooking}
           />
         );
       case 'alumnos':
@@ -111,34 +119,62 @@ export default function ProfeView({ activeTab, setActiveTab }) {
   return (
     <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* Cabecera del Profesor (solo mostrar en Inicio y Clases) */}
-      {activeTab !== 'perfil' && (
+      {/* Cabecera del Profesor */}
+      {activeTab === 'inicio' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <span className="badge badge-oliva" style={{ marginBottom: '6px' }}>Profesor activo</span>
-              <h2 style={{ fontSize: '26px' }}>Prof. {currentUser.name.split(' ')[0]}</h2>
-            </div>
-            <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--marron-arcilla)',
-            color: 'var(--blanco)',
+          <div style={{
+            backgroundColor: '#F8F9FA',
+            borderRadius: '24px',
+            padding: '24px',
             display: 'flex',
-            justifyContent: 'center',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            fontFamily: 'var(--font-serif)',
-            fontSize: '20px',
-            fontWeight: 'bold',
-            boxShadow: 'var(--shadow-clay)',
-            overflow: 'hidden'
+            marginBottom: '4px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
           }}>
-            {currentUser.avatar_url ? (
-              <img src={currentUser.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              currentUser.name[0]
-            )}
+            <div>
+              <span style={{ fontSize: '11px', fontWeight: 800, backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)', padding: '6px 12px', borderRadius: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--verde-oliva)' }}></div>
+                Profesor{currentUser?.genero === 'F' ? 'a' : currentUser?.genero === 'X' ? 'e' : ''} Activ{currentUser?.genero === 'F' ? 'a' : currentUser?.genero === 'X' ? 'e' : 'o'}
+              </span>
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--gris-oscuro)', margin: 0 }}>
+                ¡Hola, {currentUser.name}! ✨
+              </h2>
+            </div>
+            
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--marron-arcilla)',
+              color: 'var(--blanco)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontFamily: 'var(--font-serif)',
+              fontSize: '22px',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 12px rgba(228, 143, 69, 0.3)',
+              overflow: 'hidden'
+            }}>
+              {currentUser.avatar_url ? (
+                <img src={currentUser.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                currentUser.name[0]
+              )}
+            </div>
+          </div>
+        </div>
+      ) : activeTab !== 'perfil' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <span className="badge badge-clay" style={{ marginBottom: '6px', backgroundColor: '#E3EFDE', color: 'var(--verde-oliva)' }}>
+                Panel de Profesor
+              </span>
+              <h2 style={{ fontSize: '26px', margin: 0 }}>
+                {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+              </h2>
             </div>
           </div>
 

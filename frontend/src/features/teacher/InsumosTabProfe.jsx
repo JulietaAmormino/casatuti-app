@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import OpacityIcon from '@mui/icons-material/Opacity';
+import { formatDateDDMMYYYY } from '../../utils/dateUtils';
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -15,7 +17,7 @@ export default function InsumosTabProfe({
   createBake,
   createExtraClay
 }) {
-  const myClasses = classes.filter(c => c.teacherId === currentUser.id);
+  const myClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
 
   // Calcular la próxima clase para autoseleccionar
   const nextClassData = useMemo(() => {
@@ -79,7 +81,7 @@ export default function InsumosTabProfe({
           id: `${c.id}-${dateStr}`,
           classId: c.id,
           dateStr: dateStr,
-          label: `${c.sucursal ? c.sucursal + ' - ' : ''}${dayName} ${dateToCheck.getDate()} - ${c.time}`
+          label: `${c.sucursal ? c.sucursal + ' - ' : ''}${formatDateDDMMYYYY(dateStr)} - ${c.time}`
         });
       }
     }
@@ -211,8 +213,8 @@ export default function InsumosTabProfe({
       )}
 
       {/* Modal Horneado */}
-      {bakeModal.isOpen && (
-        <div className="modal-overlay" style={{ padding: '16px' }}>
+      {bakeModal.isOpen && createPortal(
+        <div className="modal-overlay" style={{ padding: '16px', zIndex: 9999 }}>
           <div className="clay-card animate-slide-up" style={{
             width: '100%', maxWidth: '400px', backgroundColor: 'var(--blanco)', padding: '24px', position: 'relative',
             maxHeight: '90vh', overflowY: 'auto'
@@ -225,7 +227,7 @@ export default function InsumosTabProfe({
               ✕
             </button>
             <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)', marginBottom: '16px' }}>
-              Registrar Horneado
+              Registrar horneado
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--gris-medio)', marginBottom: '16px' }}>
               Alumna: <strong>{bakeModal.studentName}</strong>
@@ -307,12 +309,13 @@ export default function InsumosTabProfe({
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Arcilla */}
-      {clayModal.isOpen && (
-        <div className="modal-overlay" style={{ padding: '16px' }}>
+      {clayModal.isOpen && createPortal(
+        <div className="modal-overlay" style={{ padding: '16px', zIndex: 9999 }}>
           <div className="clay-card animate-slide-up" style={{
             width: '100%', maxWidth: '400px', backgroundColor: 'var(--blanco)', padding: '24px', position: 'relative',
             maxHeight: '90vh', overflowY: 'auto'
@@ -325,7 +328,7 @@ export default function InsumosTabProfe({
               ✕
             </button>
             <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)', marginBottom: '16px' }}>
-              Arcilla Extra
+              Arcilla extra
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--gris-medio)', marginBottom: '16px' }}>
               Alumna: <strong>{clayModal.studentName}</strong>
@@ -354,7 +357,8 @@ export default function InsumosTabProfe({
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

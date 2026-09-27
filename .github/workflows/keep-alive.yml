@@ -1,0 +1,37 @@
+name: Keep Database Alive
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 12:00 UTC (9:00 AM hora de Argentina/Chile/etc.)
+    - cron: '0 12 * * *'
+  workflow_dispatch: # Permite ejecutar el flujo manualmente desde la pestaña de Actions en GitHub
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          if [ -z "${{ secrets.PROD_API_URL }}" ]; then
+            echo "❌ ERROR: La variable PROD_API_URL no está configurada en los secretos de GitHub."
+            echo "Por favor, añade PROD_API_URL (ejemplo: https://mi-backend.com) en Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+          
+          # Remover barra diagonal (slash) al final si existe
+          API_URL=$(echo "${{ secrets.PROD_API_URL }}" | sed 's/\/$//')
+          
+          echo "Pinging ${API_URL}/api/health..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "${API_URL}/api/health")
+          
+          echo "Respuesta del servidor:"
+          echo "$RESPONSE"
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | tr -d '\r' | tail -n 1 | cut -d':' -f2)
+          
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "❌ Error: El endpoint respondió con código de estado HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          
+          echo "✅ Ping exitoso. La base de datos y la API están activas."

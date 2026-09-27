@@ -20,6 +20,7 @@ export default function PerfilTab() {
     nombre: defaultNombre,
     apellido: defaultApellido,
     nro_documento: currentUser?.nro_documento || '',
+    genero: currentUser?.genero || 'F',
     fecha_nacimiento: currentUser?.fecha_nacimiento
       ? String(currentUser.fecha_nacimiento).split('T')[0]
       : '',
@@ -54,7 +55,7 @@ export default function PerfilTab() {
       reader.onloadend = async () => {
         const base64Url = reader.result;
         setFormData(prev => ({ ...prev, avatar_url: base64Url }));
-        
+
         // Auto-guardar para que se refleje inmediatamente en el avatar superior
         try {
           await updateUserAction(currentUser.id, { ...formData, avatar_url: base64Url });
@@ -243,7 +244,11 @@ export default function PerfilTab() {
           letterSpacing: '1px',
           textTransform: 'uppercase'
         }}>
-          {currentUser?.role || 'ALUMNO'}
+          {currentUser?.role === 'ALUMNO' || !currentUser?.role 
+            ? (currentUser?.genero === 'X' ? 'ALUMN@' : (currentUser?.genero === 'F' ? 'ALUMNA' : 'ALUMNO'))
+            : (currentUser?.role === 'PROFESOR' ? (currentUser?.genero === 'X' ? 'PROFESOR@' : (currentUser?.genero === 'F' ? 'PROFESORA' : 'PROFESOR')) : currentUser?.role)
+          }
+          {currentUser?.sucursal && (currentUser?.role === 'ALUMNO' || !currentUser?.role) && ` · ${currentUser.sucursal}`}
         </span>
       </div>
 
@@ -257,32 +262,36 @@ export default function PerfilTab() {
         </div>
 
         {message && (
-          <div className={`alert-banner ${message.type === 'error' ? 'danger' : 'success'}`} style={{ marginBottom: '20px' }}>
+          <div className={`alert-banner ${message.type === 'error' ? 'danger' : 'success'}`} style={{ position: 'relative', top: 'auto', left: 'auto', transform: 'none', width: '100%', animation: 'none', marginBottom: '20px', zIndex: 1 }}>
             {message.text}
           </div>
         )}
 
         <form onSubmit={handleSubmitProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="form-group">
-              <label style={labelStyle}>Nombre</label>
-              <input type="text" name="nombre" style={inputStyle} value={formData.nombre} onChange={handleInput} required />
-            </div>
-            <div className="form-group">
-              <label style={labelStyle}>Apellido</label>
-              <input type="text" name="apellido" style={inputStyle} value={formData.apellido} onChange={handleInput} />
-            </div>
+          <div className="form-group">
+            <label style={labelStyle}>Nombre</label>
+            <input type="text" name="nombre" style={inputStyle} value={formData.nombre} onChange={handleInput} required />
+          </div>
+          <div className="form-group">
+            <label style={labelStyle}>Apellido</label>
+            <input type="text" name="apellido" style={inputStyle} value={formData.apellido} onChange={handleInput} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="form-group">
-              <label style={labelStyle}>DNI</label>
-              <input type="number" name="nro_documento" style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }} value={formData.nro_documento} disabled />
-            </div>
-            <div className="form-group">
-              <label style={labelStyle}>Fecha de nacimiento</label>
-              <input type="date" name="fecha_nacimiento" style={inputStyle} value={formData.fecha_nacimiento} onChange={handleInput} />
-            </div>
+          <div className="form-group">
+            <label style={labelStyle}>DNI</label>
+            <input type="number" name="nro_documento" style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }} value={formData.nro_documento} disabled />
+          </div>
+          <div className="form-group" style={{ minWidth: 0 }}>
+            <label style={labelStyle}>Fecha de nacimiento</label>
+            <input type="date" name="fecha_nacimiento" style={{ ...inputStyle, minWidth: 0, maxWidth: '100%', WebkitAppearance: 'none' }} value={formData.fecha_nacimiento} onChange={handleInput} />
+          </div>
+          <div className="form-group">
+            <label style={labelStyle}>Género</label>
+            <select name="genero" style={{ ...inputStyle, cursor: 'pointer' }} value={formData.genero} onChange={handleInput}>
+              <option value="F">Femenino</option>
+              <option value="M">Masculino</option>
+              <option value="X">Otro / Prefiero no decir</option>
+            </select>
           </div>
 
           <div style={sectionHeaderStyle}>
@@ -324,7 +333,7 @@ export default function PerfilTab() {
         </div>
 
         {passMessage && (
-          <div className={`alert-banner ${passMessage.type === 'error' ? 'danger' : 'success'}`} style={{ marginBottom: '20px' }}>
+          <div className={`alert-banner ${passMessage.type === 'error' ? 'danger' : 'success'}`} style={{ position: 'relative', top: 'auto', left: 'auto', transform: 'none', width: '100%', animation: 'none', marginBottom: '20px', zIndex: 1 }}>
             {passMessage.text}
           </div>
         )}
@@ -333,7 +342,6 @@ export default function PerfilTab() {
           <div className="form-group">
             <label style={labelStyle}>Contraseña actual</label>
             <input type="password" name="currentPassword" style={inputStyle} value={passwordData.currentPassword} onChange={handlePassInput} />
-            <p style={{ fontSize: '11px', color: '#8C9B96', marginTop: '6px', marginLeft: '4px' }}>Déjalo en blanco si usas la contraseña por defecto (tuti123).</p>
           </div>
           <div className="form-group">
             <label style={labelStyle}>Nueva contraseña</label>

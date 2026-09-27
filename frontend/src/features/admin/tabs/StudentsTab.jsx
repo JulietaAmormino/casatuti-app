@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 
 export default function StudentsTab({ showFeedback, onEdit, initialFilter, onClearFilter }) {
-  const { users, studentProfiles, createNewUserAction, deleteUserAction, toggleStudentBlockAction, branches } = useApp();
+  const { users, studentProfiles, createNewUserAction, deleteUserAction, toggleStudentBlockAction, resendWelcomeEmailsAction, branches } = useApp();
   const students = users.filter(u => u.role === 'ALUMNO');
 
   const [mode, setMode] = useState('list'); // 'list' | 'create'
@@ -12,6 +12,9 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
   const [filterZeroCredits, setFilterZeroCredits] = useState(false); // toggle zero credits
   const [filterActivePacks, setFilterActivePacks] = useState(false); // toggle active packs
   const [expandedStudentId, setExpandedStudentId] = useState(null);
+  const [isResending, setIsResending] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const { grantBulkFreeCreditsAction } = useApp();
 
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
@@ -20,6 +23,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
   const [telefono, setTelefono] = useState('');
   const [instagram, setInstagram] = useState('');
   const [birthdate, setBirthdate] = useState('');
+  const [genero, setGenero]       = useState('F');
   const [branch, setBranch] = useState(branches.length > 0 ? branches[0].name : 'CENTRO');
 
   React.useEffect(() => {
@@ -58,11 +62,13 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
         telefono: telefono || null,
         instagram: instagram.trim() || null,
         fecha_nacimiento: birthdate || null,
-        sucursal: branch
+        sucursal: branch,
+        genero: genero
       });
-      showFeedback(`¡Alumna "${fullName}" registrada con éxito!`, 'success');
+      const p = genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a';
+      showFeedback(`¡Alumn${p} "${fullName}" registrad${p} con éxito!`, 'success');
       setNombre(''); setApellido(''); setEmail(''); setDocumento('');
-      setTelefono(''); setInstagram(''); setBirthdate(''); setBranch(branches.length > 0 ? branches[0].name : 'CENTRO');
+      setTelefono(''); setInstagram(''); setBirthdate(''); setGenero('F'); setBranch(branches.length > 0 ? branches[0].name : 'CENTRO');
       setMode('list'); // Redirigir a listado después de crear
     } catch (err) {
       showFeedback(err.message, 'danger');
@@ -96,6 +102,32 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
     return parts.map(p => p[0]).join('').toUpperCase().substring(0, 3);
   };
 
+  const toggleSelection = (id) => {
+    setSelectedStudentIds(prev =>
+      prev.includes(id) ? prev.filter(sId => sId !== id) : [...prev, id]
+    );
+  };
+
+  const handleGrantFreeCredits = async () => {
+    if (selectedStudentIds.length === 0) return;
+    const qtyStr = window.prompt(`¿Cuántos créditos gratis deseas otorgar a las ${selectedStudentIds.length} alumnas seleccionadas?`, '1');
+    if (!qtyStr) return; // cancelled
+    const qty = parseInt(qtyStr, 10);
+    if (isNaN(qty) || qty <= 0) {
+      showFeedback('Cantidad inválida.', 'danger');
+      return;
+    }
+    if (!window.confirm(`¿Confirmas que deseas regalar ${qty} crédito(s) a ${selectedStudentIds.length} alumna(s)?`)) return;
+
+    try {
+      await grantBulkFreeCreditsAction(selectedStudentIds, qty);
+      showFeedback(`Se otorgaron ${qty} créditos a ${selectedStudentIds.length} alumna(s) con éxito.`, 'success');
+      setSelectedStudentIds([]); // clear selection
+    } catch (err) {
+      showFeedback(err.message, 'danger');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
@@ -114,7 +146,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--gris-oscuro)', margin: 0 }}>
-                Nuevo/a alumno/a
+                {genero === 'M' ? 'Nuevo alumno' : genero === 'X' ? 'Nuev@ alumn@' : 'Nueva alumna'}
               </h3>
               <button
                 type="button"
@@ -163,16 +195,25 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
             </div>
 
             <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Género *</label>
+              <select className="input-tuti" value={genero} onChange={e => setGenero(e.target.value)} required style={{ width: '100%', cursor: 'pointer' }}>
+                <option value="F">Femenino</option>
+                <option value="M">Masculino</option>
+                <option value="X">No binario</option>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Sucursal</label>
-              <select className="input-tuti" value={branch} onChange={e => setBranch(e.target.value)} style={{ width: '100%', cursor: 'pointer' }}>
+              <select className="input-tuti" value={branch} onChange={e => setBranch(e.target.value.toUpperCase())} style={{ width: '100%', cursor: 'pointer' }}>
                 {branches.map(b => (
-                  <option key={b.id} value={b.name}>{b.name}</option>
+                  <option key={b.id} value={b.name.toUpperCase()}>{b.name}</option>
                 ))}
               </select>
             </div>
 
             <button type="submit" className="btn-tuti btn-success-soft" style={{ marginTop: '8px', fontSize: '14px', padding: '14px', width: '100%', fontWeight: '700' }}>
-              + Registrar Alumna
+              + Registrar Alumn{genero === 'M' ? 'o' : genero === 'X' ? '@' : 'a'}
             </button>
           </form>
           </div>
@@ -350,6 +391,53 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
 
           </div>
 
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
+            {selectedStudentIds.length > 0 ? (
+              <button
+                onClick={handleGrantFreeCredits}
+                style={{
+                  padding: '10px 16px', borderRadius: '16px', border: 'none',
+                  backgroundColor: 'var(--marron-arcilla)', color: 'var(--blanco)',
+                  fontSize: '12px', fontWeight: 800, cursor: 'pointer', transition: 'opacity 0.2s',
+                  display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = 0.9}
+                onMouseOut={e => e.currentTarget.style.opacity = 1}
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Regalar Créditos ({selectedStudentIds.length})
+              </button>
+            ) : <div />}
+
+            <button
+              disabled={isResending || filteredStudents.length === 0}
+              onClick={async () => {
+                if (!window.confirm(`¿Estás seguro de re-enviar el correo de bienvenida a TODAS las alumnas filtradas (${filteredStudents.length})? Se les asignará la contraseña 'tuti123'.`)) return;
+                setIsResending(true);
+                try {
+                  const studentIds = filteredStudents.map(s => s.id);
+                  const result = await resendWelcomeEmailsAction(studentIds);
+                  showFeedback(`Se reenviaron ${result.count || studentIds.length} correos de bienvenida.`, 'success');
+                } catch (error) {
+                  showFeedback(error.message, 'danger');
+                } finally {
+                  setIsResending(false);
+                }
+              }}
+              style={{
+                padding: '10px 16px', borderRadius: '16px', border: 'none',
+                backgroundColor: 'var(--verde-oliva)', color: 'var(--blanco)',
+                fontSize: '12px', fontWeight: 800, cursor: 'pointer', transition: 'opacity 0.2s',
+                display: 'flex', alignItems: 'center', gap: '6px'
+              }}
+              onMouseOver={e => e.currentTarget.style.opacity = 0.9}
+              onMouseOut={e => e.currentTarget.style.opacity = 1}
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+              {isResending ? 'Enviando...' : 'Re-enviar Bienvenida a Filtradas'}
+            </button>
+          </div>
+
           <div>
 
             {filteredStudents.length === 0 ? (
@@ -382,6 +470,21 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
                     >
                       {/* Fila Principal de Información */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+                        
+                        {/* Checkbox de selección */}
+                        <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, padding: '4px' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedStudentIds.includes(st.id)}
+                            onChange={() => toggleSelection(st.id)}
+                            style={{ 
+                              width: '20px', height: '20px', cursor: 'pointer', 
+                              accentColor: 'var(--verde-oliva)', margin: 0,
+                              borderRadius: '4px', border: '1px solid var(--gris-claro)'
+                            }} 
+                          />
+                        </div>
+
                         {/* Círculo con Iniciales */}
                         <div style={{
                           width: '48px',
@@ -487,7 +590,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
                           {/* Details removed */}
 
                           {/* Botones de acción */}
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {/* 1. Pausar */}
                             <button
                               onClick={async (e) => {
@@ -538,6 +641,31 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
                               onMouseOut={e => e.currentTarget.style.opacity = 1}
                             >
                               Eliminar
+                            </button>
+                            
+                            {/* 4. Re-enviar Bienvenida */}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!window.confirm(`¿Deseas re-enviar el correo de bienvenida a ${st.name}? Se le asignará la clave 'tuti123'.`)) return;
+                                try {
+                                  await resendWelcomeEmailsAction([st.id]);
+                                  showFeedback(`Correo enviado a ${st.name}.`, 'success');
+                                } catch (error) {
+                                  showFeedback(error.message, 'danger');
+                                }
+                              }}
+                              style={{
+                                flex: '1 1 100%', padding: '12px 0', borderRadius: '16px', border: '1px solid var(--verde-oliva)',
+                                backgroundColor: 'transparent', color: 'var(--verde-oliva)',
+                                fontSize: '12px', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                              }}
+                              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--verde-oliva)'; e.currentTarget.style.color = 'var(--blanco)'; }}
+                              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--verde-oliva)'; }}
+                            >
+                              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                              Re-enviar Bienvenida (Email)
                             </button>
                           </div>
                         </div>

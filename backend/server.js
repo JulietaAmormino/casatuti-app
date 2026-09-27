@@ -11,9 +11,23 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5005;
 
-// Habilitar CORS para permitir peticiones del frontend (Vite y Producción)
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://casatuti.vercel.app',
+  'https://casatuti-app.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+].filter(Boolean);
+
 app.use(cors({
-  origin: ['https://casatuti-app.vercel.app', 'http://localhost:5173'],
+  origin: function (origin, callback) {
+    // Si no hay origin (por ejemplo peticiones del mismo servidor o herramientas como Postman), se permite
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Bloqueado por política de CORS'));
+    }
+  },
   credentials: true
 }));
 
@@ -25,6 +39,27 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     process.env.VAPID_PRIVATE_KEY
   );
 }
+
+// Helper centralizado para enviar Web Push a uno o varios usuarios
+const sendPush = async (userIds, title, body) => {
+  try {
+    const ids = Array.isArray(userIds) ? userIds : [userIds];
+    const payload = JSON.stringify({ title, body });
+    for (const uid of ids) {
+      const subs = await db.query(
+        'SELECT subscription FROM public.t_suscripciones_push WHERE id_usuarios = $1',
+        [uid]
+      );
+      for (const s of subs.rows) {
+        webPush.sendNotification(s.subscription, payload).catch(e =>
+          console.error(`[Push] Error enviando a usuario ${uid}:`, e.message)
+        );
+      }
+    }
+  } catch (e) {
+    console.error('[Push] Error en sendPush:', e.message);
+  }
+};
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -60,6 +95,8 @@ const mapUserToFE = (u) => {
     fecha_nacimiento: u.fecha_nacimiento || null,
     bl_cambio_pass_pte: u.bl_cambio_pass_pte || false,
     sucursal: u.sucursal || 'CENTRO',
+    secondaryRole: u.secondary_role || null,
+    genero: u.genero || null,
     created_at: u.created_at || null
   };
 };
@@ -87,7 +124,9 @@ const mapBookingToFE = (b) => {
     studentName: b.student_name,
     classId: b.class_id,
     date: dateStr,
-    status: b.status
+    status: b.status,
+    rescheduledTo: b.id_reprogramada_hacia,
+    rescheduledFrom: b.id_reprogramada_desde
   };
 };
 
@@ -170,7 +209,7 @@ const mapClassToFE = (c) => {
   return {
     id: c.id_clases_def,
     name: c.name || autoName,
-    teacherId: c.teacher_id,
+    teacherIds: c.teacher_ids || (c.teacher_id ? [c.teacher_id] : []),
     teacherName: c.teacher_name,
     day: dayStr,
     time: timeStr,
@@ -205,6 +244,27 @@ const mapFaqToFE = (f) => {
 // 1. ENDPOINTS DE AUTENTICACIÓN
 // ==========================================
 
+// Ruta de salud de la API (también sirve para mantener activa la base de datos de Supabase)
+app.get('/api/health', async (req, res) => {
+  try {
+    // Realizamos una consulta rápida para asegurar que la base de datos responda y evitar que se pause
+    await db.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('❌ Error en el health check de la base de datos:', err);
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Login
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
@@ -213,7 +273,12 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const query = 'SELECT * FROM public.t_usuarios WHERE LOWER(email) = LOWER($1)';
+    const query = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE LOWER(u.email) = LOWER($1)
+    `;
     const { rows } = await db.query(query, [email]);
 
     if (rows.length === 0) {
@@ -234,6 +299,40 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Cambiar de perfil (Swap rol y secondary_role)
+app.post('/api/auth/switch-profile', async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Falta el id del usuario.' });
+  try {
+    const queryStr = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE u.id_usuarios = $1
+    `;
+    const { rows } = await db.query(queryStr, [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    
+    const user = rows[0];
+    if (!user.secondary_role) return res.status(400).json({ error: 'El usuario no tiene un rol secundario asignado.' });
+
+    const newRole = user.secondary_role;
+    const newSecondaryRole = user.rol;
+
+    const updateRes = await db.query(
+      'UPDATE public.t_usuarios SET rol = $1, secondary_role = $2 WHERE id_usuarios = $3 RETURNING *',
+      [newRole, newSecondaryRole, id]
+    );
+    const updatedUser = updateRes.rows[0];
+    const { rows: branchRows } = await db.query(`SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') AS sucursal FROM unnest($1::integer[]) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid`, [updatedUser.id_sucursales || []]);
+    updatedUser.sucursal = branchRows[0].sucursal;
+    res.json(mapUserToFE(updatedUser));
+  } catch (error) {
+    console.error('Error en switch-profile:', error);
+    res.status(500).json({ error: 'Error al cambiar de perfil.' });
+  }
+});
+
 // Recuperación de Contraseña
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { email } = req.body;
@@ -242,7 +341,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 
   try {
-    const query = 'SELECT * FROM public.t_usuarios WHERE LOWER(email) = LOWER($1)';
+    const query = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE LOWER(u.email) = LOWER($1)
+    `;
     const { rows } = await db.query(query, [email]);
 
     if (rows.length === 0) {
@@ -277,7 +381,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // Listar todos los usuarios
 app.get('/api/users', async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM public.t_usuarios ORDER BY nombre ASC');
+    const queryStr = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      ORDER BY u.nombre ASC
+    `;
+    const { rows } = await db.query(queryStr);
     res.json(rows.map(mapUserToFE));
   } catch (error) {
     console.error('Error al listar usuarios:', error);
@@ -296,7 +406,8 @@ app.post('/api/users', async (req, res) => {
     telefono,
     instagram,
     fecha_nacimiento,
-    sucursal
+    sucursal,
+    genero
   } = req.body;
 
   if (!email || !name || !role) {
@@ -311,8 +422,10 @@ app.post('/api/users', async (req, res) => {
     // 1. Insertar el usuario en la tabla t_usuarios
     const userInsertQuery = `
       INSERT INTO public.t_usuarios 
-      (nro_documento, clave, email, nombre, apellido, telefono, instagram, fecha_nacimiento, rol, bl_cambio_pass_pte, sucursal) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (nro_documento, clave, email, nombre, apellido, telefono, instagram, fecha_nacimiento, rol, bl_cambio_pass_pte, id_sucursales, genero) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+        (SELECT array_agg(s.id_sucursal) FROM public.t_sucursales s WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($11, ',')))))), 
+        $12)
       RETURNING *
     `;
     const { rows } = await db.query(userInsertQuery, [
@@ -326,10 +439,13 @@ app.post('/api/users', async (req, res) => {
       fecha_nacimiento || null,
       role,
       false, // bl_cambio_pass_pte
-      sucursal || 'CENTRO'
+      sucursal || 'CENTRO',
+      genero || null
     ]);
 
     const createdUser = rows[0];
+    const { rows: branchRows } = await db.query(`SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') AS sucursal FROM unnest($1::integer[]) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid`, [createdUser.id_sucursales || []]);
+    createdUser.sucursal = branchRows[0].sucursal;
 
     // 2. Si el rol es ALUMNO, crear su perfil correspondiente en t_cuenta_alumno
     if (role === 'ALUMNO') {
@@ -346,7 +462,7 @@ app.post('/api/users', async (req, res) => {
         const tempPassword = password || 'tuti123';
 
         // Disparamos el correo en background para no bloquear la respuesta
-        sendWelcomeEmail(email, nombre, tempPassword, rulesHtml).catch(err => console.error("Error enviando email:", err));
+        sendWelcomeEmail(email, nombre, tempPassword, rulesHtml, genero).catch(err => console.error("Error enviando email:", err));
       } catch (emailErr) {
         console.error('Error al armar o enviar el email de bienvenida:', emailErr);
       }
@@ -359,6 +475,50 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'El correo electrónico o número de documento ya está registrado.' });
     }
     res.status(500).json({ error: 'Error interno al registrar usuario.' });
+  }
+});
+
+// Re-enviar email de bienvenida masivo
+app.post('/api/users/resend-welcome-bulk', async (req, res) => {
+  const { studentIds } = req.body;
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({ error: 'Faltan los IDs de las alumnas.' });
+  }
+
+  try {
+    const { rows: usersToNotify } = await db.query(
+      'SELECT id_usuarios, email, nombre FROM public.t_usuarios WHERE id_usuarios = ANY($1) AND rol = $2',
+      [studentIds, 'ALUMNO']
+    );
+
+    if (usersToNotify.length === 0) {
+      return res.status(404).json({ error: 'No se encontraron alumnas válidas para notificar.' });
+    }
+
+    // Obtener normas (FAQs)
+    const { rows: faqs } = await db.query('SELECT pregunta, respuesta FROM public.t_faqs ORDER BY created_at ASC');
+    let rulesHtml = faqs.map(f => `<p style="margin-bottom: 4px;"><strong>${f.pregunta}</strong></p><p style="margin-top: 0;">${f.respuesta}</p>`).join('');
+    if (!rulesHtml) rulesHtml = '<p>No hay normas registradas en este momento.</p>';
+
+    const tempPassword = 'tuti123';
+    
+    // Actualizar contraseñas a tuti123 y pedir cambio
+    await db.query(
+      'UPDATE public.t_usuarios SET clave = $1, bl_cambio_pass_pte = true WHERE id_usuarios = ANY($2)',
+      [tempPassword, usersToNotify.map(u => u.id_usuarios)]
+    );
+
+    // Enviar correos
+    for (const u of usersToNotify) {
+      if (u.email) {
+        sendWelcomeEmail(u.email, u.nombre, tempPassword, rulesHtml).catch(err => console.error("Error reenviando email a:", u.email, err));
+      }
+    }
+
+    res.json({ success: true, count: usersToNotify.length });
+  } catch (error) {
+    console.error('Error al reenviar emails de bienvenida:', error);
+    res.status(500).json({ error: 'Error interno al reenviar correos.' });
   }
 });
 
@@ -393,6 +553,28 @@ app.put('/api/users/:id/role', async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar rol:', error);
     res.status(500).json({ error: 'Error al actualizar el rol de usuario.' });
+  }
+});
+
+// Actualizar rol secundario de un usuario
+app.put('/api/users/:id/secondary-role', async (req, res) => {
+  const { id } = req.params;
+  const { secondaryRole } = req.body;
+
+  try {
+    const { rows } = await db.query(
+      'UPDATE public.t_usuarios SET secondary_role = $1 WHERE id_usuarios = $2 RETURNING *',
+      [secondaryRole || null, id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    res.json(mapUserToFE(rows[0]));
+  } catch (error) {
+    console.error('Error al actualizar rol secundario:', error);
+    res.status(500).json({ error: 'Error al actualizar el rol secundario de usuario.' });
   }
 });
 
@@ -493,7 +675,8 @@ app.put('/api/users/:id', async (req, res) => {
     instagram,
     fecha_nacimiento,
     avatar_url,
-    sucursal
+    sucursal,
+    genero
   } = req.body;
 
   if (!email || !nombre || !nro_documento) {
@@ -514,8 +697,9 @@ app.put('/api/users/:id', async (req, res) => {
         instagram = $6,
         fecha_nacimiento = $7,
         avatar_url = $8,
-        sucursal = $9
-      WHERE id_usuarios = $10
+        id_sucursales = (SELECT array_agg(s.id_sucursal) FROM public.t_sucursales s WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($9, ',')))))),
+        genero = $10
+      WHERE id_usuarios = $11
       RETURNING *
     `;
     const formattedNombre = capitalizeName(nombre);
@@ -531,6 +715,7 @@ app.put('/api/users/:id', async (req, res) => {
       fecha_nacimiento || null,
       avatar_url || null,
       sucursal || 'CENTRO',
+      genero || null,
       id
     ]);
 
@@ -680,8 +865,12 @@ app.get('/api/classes', async (req, res) => {
       SELECT 
         c.id_clases_def AS id_clases_def,
         NULL AS name,
-        c.id_profesor AS teacher_id,
-        COALESCE(u.nombre || ' ' || u.apellido, 'Sin profesor') AS teacher_name,
+        c.id_profesores AS teacher_ids,
+        (
+          SELECT COALESCE(string_agg(u.nombre || ' ' || u.apellido, ', '), 'Sin profesor')
+          FROM public.t_usuarios u
+          WHERE u.id_usuarios = ANY(c.id_profesores)
+        ) AS teacher_name,
         CASE c.dia_semana
           WHEN 'Miercoles' THEN 'Miércoles'
           WHEN 'Sabado' THEN 'Sábado'
@@ -696,7 +885,6 @@ app.get('/api/classes', async (req, res) => {
           WHERE i.id_clases_def = c.id_clases_def AND i.bl_cancelada = true
         ) AS paused_dates
       FROM public.t_clases_def c
-      LEFT JOIN public.t_usuarios u ON c.id_profesor = u.id_usuarios
       LEFT JOIN public.t_sucursales s ON c.id_sucursal = s.id_sucursal
       WHERE c.bl_activa = true
       ORDER BY 
@@ -718,9 +906,9 @@ app.get('/api/classes', async (req, res) => {
 
 // Crear una clase o repeticiones múltiples
 app.post('/api/classes', async (req, res) => {
-  const { name, teacherId, teacherName, day, time, capacity, repeatDays, sucursal } = req.body;
+  const { name, teacherIds, teacherName, day, time, capacity, repeatDays, sucursal } = req.body;
 
-  if (!teacherId || !teacherName || !time || !capacity) {
+  if (!teacherIds || !teacherIds.length || !time || !capacity) {
     return res.status(400).json({ error: 'Faltan campos requeridos para crear el turno.' });
   }
 
@@ -746,7 +934,7 @@ app.post('/api/classes', async (req, res) => {
       const dia_semana = d.replace('é', 'e').replace('á', 'a'); // 'Miércoles' -> 'Miercoles', 'Sábado' -> 'Sabado'
 
       const query = `
-        INSERT INTO public.t_clases_def (dia_semana, hora_inicio, hora_fin, cupo_maximo, id_profesor, id_sucursal, bl_activa)
+        INSERT INTO public.t_clases_def (dia_semana, hora_inicio, hora_fin, cupo_maximo, id_profesores, id_sucursal, bl_activa)
         VALUES ($1, $2, $3, $4, $5, $6, true)
         RETURNING id_clases_def
       `;
@@ -755,7 +943,7 @@ app.post('/api/classes', async (req, res) => {
         hora_inicio,
         hora_fin,
         capacity,
-        teacherId,
+        teacherIds,
         idSucursal
       ]);
       const generatedId = result.rows[0].id_clases_def;
@@ -763,7 +951,7 @@ app.post('/api/classes', async (req, res) => {
       createdClasses.push({
         id_clases_def: generatedId,
         name: null,
-        teacher_id: teacherId,
+        teacher_ids: teacherIds,
         teacher_name: teacherName,
         day: d,
         time,
@@ -782,7 +970,7 @@ app.post('/api/classes', async (req, res) => {
 // Modificar datos de una clase (Turno)
 app.put('/api/classes/:id', async (req, res) => {
   const { id } = req.params;
-  const { teacherId, teacherName, day, time, capacity, sucursal } = req.body;
+  const { teacherIds, teacherName, day, time, capacity, sucursal } = req.body;
 
   if (!time || !capacity || !day) {
     return res.status(400).json({ error: 'Faltan campos requeridos para actualizar el turno.' });
@@ -806,7 +994,7 @@ app.put('/api/classes/:id', async (req, res) => {
 
     const query = `
       UPDATE public.t_clases_def
-      SET dia_semana = $1, hora_inicio = $2, hora_fin = $3, cupo_maximo = $4, id_profesor = $5, id_sucursal = $6
+      SET dia_semana = $1, hora_inicio = $2, hora_fin = $3, cupo_maximo = $4, id_profesores = $5, id_sucursal = $6
       WHERE id_clases_def = $7
       RETURNING *
     `;
@@ -815,7 +1003,7 @@ app.put('/api/classes/:id', async (req, res) => {
       hora_inicio,
       hora_fin,
       Number(capacity),
-      teacherId,
+      teacherIds,
       idSucursal,
       id
     ]);
@@ -829,8 +1017,12 @@ app.put('/api/classes/:id', async (req, res) => {
       SELECT 
         c.id_clases_def AS id_clases_def,
         NULL AS name,
-        c.id_profesor AS teacher_id,
-        COALESCE(u.nombre || ' ' || u.apellido, 'Sin profesor') AS teacher_name,
+        c.id_profesores AS teacher_ids,
+        (
+          SELECT COALESCE(string_agg(u.nombre || ' ' || u.apellido, ', '), 'Sin profesor')
+          FROM public.t_usuarios u
+          WHERE u.id_usuarios = ANY(c.id_profesores)
+        ) AS teacher_name,
         CASE c.dia_semana
           WHEN 'Miercoles' THEN 'Miércoles'
           WHEN 'Sabado' THEN 'Sábado'
@@ -845,7 +1037,6 @@ app.put('/api/classes/:id', async (req, res) => {
           WHERE i.id_clases_def = c.id_clases_def AND i.bl_cancelada = true
         ) AS paused_dates
       FROM public.t_clases_def c
-      LEFT JOIN public.t_usuarios u ON c.id_profesor = u.id_usuarios
       LEFT JOIN public.t_sucursales s ON c.id_sucursal = s.id_sucursal
       WHERE c.id_clases_def = $1
     `;
@@ -915,6 +1106,12 @@ app.post('/api/classes/:id/pause', async (req, res) => {
         await db.query(
           "INSERT INTO public.t_historial_creditos (id_usuarios, movimiento, origen_movimiento) VALUES ($1, 1, 'Cancelación por Administrador (Turno Pausado)')",
           [inscripcion.id_usuarios]
+        );
+        // Push nativo a la alumna
+        await sendPush(
+          inscripcion.id_usuarios,
+          '🚫 Clase cancelada',
+          `Tu clase del ${date} fue cancelada por la administración. Se te devolvió 1 crédito.`
         );
       }
     }
@@ -1047,7 +1244,9 @@ app.get('/api/bookings', async (req, res) => {
           WHEN 'CANCELADA' THEN 'CANCELLED'
           ELSE i.estado
         END AS status,
-        i.fec_reserva AS created_at
+        i.fec_reserva AS created_at,
+        i.id_reprogramada_hacia,
+        i.id_reprogramada_desde
       FROM public.t_inscripciones i
       JOIN public.t_usuarios u ON i.id_usuarios = u.id_usuarios
       JOIN public.t_clases_instancia ci ON i.id_clase_instancia = ci.id_clase_instancia
@@ -1250,21 +1449,17 @@ app.post('/api/bookings', async (req, res) => {
       created_at: new Date()
     };
 
-    // --- Notificación Web Push a Admins ---
+    // --- Notificación Web Push solo a Admins ---
     try {
-      const payload = JSON.stringify({
-        title: 'Nueva Reserva',
-        body: `La alumna ${studentName} se ha inscripto a una clase el ${date} a las ${classTime}.`
-      });
-      const subQuery = await db.query('SELECT subscription FROM public.t_suscripciones_push');
-      for (let s of subQuery.rows) {
-        try {
-          await webPush.sendNotification(s.subscription, payload);
-        } catch (e) {
-          console.error('Error enviando push a suscripción:', e);
-          // Si la suscripción expiró, se podría eliminar aquí
-        }
-      }
+      const adminUsersRes = await db.query(
+        "SELECT id_usuarios FROM public.t_usuarios WHERE rol IN ('ADMIN', 'SOPORTE')"
+      );
+      const adminIds = adminUsersRes.rows.map(r => r.id_usuarios);
+      await sendPush(
+        adminIds,
+        'Nueva Reserva 📅',
+        `${studentName} se inscribió a la clase del ${date} a las ${classTime}.`
+      );
     } catch (pushErr) {
       console.error('Error procesando web push en reservas:', pushErr);
     }
@@ -1279,7 +1474,7 @@ app.post('/api/bookings', async (req, res) => {
 // Cancelar una reserva (Límite de 2 horas)
 app.post('/api/bookings/:id/cancel', async (req, res) => {
   const { id } = req.params;
-  const { forceLate } = req.body;
+  const { forceLate, forceRefund } = req.body;
 
   try {
     // 1. Obtener la reserva
@@ -1323,7 +1518,7 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
     const diffMs = classStartDateTime.getTime() - now.getTime();
     const diffHours = diffMs / (1000 * 60 * 60);
 
-    const isLateCancellation = forceLate || diffHours < 2;
+    const isLateCancellation = (forceLate || diffHours < 2) && !forceRefund;
 
     if (isLateCancellation) {
       // Cancelación tardía: Se cobra (se cambia a CANCELADA en la base, pero NO se reintegra el crédito)
@@ -1370,6 +1565,12 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
           'INSERT INTO public.t_notificaciones (id_usuarios, titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, $4, false, NOW())',
           [wlUser.id_usuarios, 'Cupo Liberado', notifyMsg, 'WAITLIST_FREE_SPOT']
         );
+        // Push nativo al celular
+        await sendPush(
+          wlUser.id_usuarios,
+          '¡Cupo disponible! 🎉',
+          notifyMsg
+        );
       }
 
       await db.query(
@@ -1382,6 +1583,94 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
   } catch (error) {
     console.error('Error al cancelar reserva:', error);
     res.status(500).json({ error: 'Error al cancelar la reserva.' });
+  }
+});
+
+// Reprogramar una reserva
+app.post('/api/bookings/:id/reschedule', async (req, res) => {
+  const { id } = req.params;
+  const { newClassId, newDate } = req.body;
+
+  if (!newClassId || !newDate) {
+    return res.status(400).json({ error: 'Faltan parámetros requeridos (newClassId, newDate).' });
+  }
+
+  try {
+    await db.query('BEGIN');
+
+    // 1. Obtener reserva original
+    const bookingRes = await db.query('SELECT * FROM public.t_inscripciones WHERE id_inscripcion = $1', [id]);
+    if (bookingRes.rows.length === 0) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Reserva no encontrada.' });
+    }
+    const oldBooking = bookingRes.rows[0];
+
+    // Validar tiempo para reprogramar (mismo que cancelar, 2hs antes)
+    const oldInstRes = await db.query('SELECT * FROM public.t_clases_instancia WHERE id_clase_instancia = $1', [oldBooking.id_clase_instancia]);
+    const oldClassDefRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [oldInstRes.rows[0].id_clases_def]);
+    
+    const startTimeStr = oldClassDefRes.rows[0].hora_inicio.toString().split(' ')[0];
+    const [hours, minutes] = startTimeStr.split(':').map(Number);
+    const oldClassDate = new Date(oldInstRes.rows[0].fecha_efectiva);
+    oldClassDate.setHours(hours, minutes, 0, 0);
+    const diffHours = (oldClassDate.getTime() - new Date().getTime()) / (1000 * 60 * 60);
+
+    if (diffHours < 2) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'No puedes reprogramar con menos de 2 horas de anticipación.' });
+    }
+
+    // 2. Obtener o crear instancia de la nueva clase
+    let newInstanceId;
+    const instanceRes = await db.query(
+      'SELECT id_clase_instancia FROM public.t_clases_instancia WHERE id_clases_def = $1 AND fecha_efectiva = $2',
+      [newClassId, newDate]
+    );
+
+    if (instanceRes.rows.length > 0) {
+      newInstanceId = instanceRes.rows[0].id_clase_instancia;
+    } else {
+      const result = await db.query(
+        'INSERT INTO public.t_clases_instancia (id_clases_def, fecha_efectiva, bl_cancelada) VALUES ($1, $2, false) RETURNING id_clase_instancia',
+        [newClassId, newDate]
+      );
+      newInstanceId = result.rows[0].id_clase_instancia;
+    }
+
+    // Validar cupos en nueva clase
+    const countRes = await db.query(
+      "SELECT COUNT(*) FROM public.t_inscripciones WHERE id_clase_instancia = $1 AND estado != 'CANCELADA'",
+      [newInstanceId]
+    );
+    const activeBookingsCount = parseInt(countRes.rows[0].count);
+    const newClassDefRes = await db.query('SELECT cupo_maximo FROM public.t_clases_def WHERE id_clases_def = $1', [newClassId]);
+    if (activeBookingsCount >= newClassDefRes.rows[0].cupo_maximo) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'La nueva clase no tiene cupos disponibles.' });
+    }
+
+    // 3. Crear nueva reserva apuntando a la vieja
+    const insertBookingQuery = `
+      INSERT INTO public.t_inscripciones (id_usuarios, id_clase_instancia, estado, fec_reserva, id_reprogramada_desde)
+      VALUES ($1, $2, 'RESERVADA', NOW(), $3)
+      RETURNING id_inscripcion
+    `;
+    const newBookingResult = await db.query(insertBookingQuery, [oldBooking.id_usuarios, newInstanceId, oldBooking.id_inscripcion]);
+    const newBookingId = newBookingResult.rows[0].id_inscripcion;
+
+    // 4. Cancelar reserva vieja apuntando a la nueva
+    await db.query(
+      "UPDATE public.t_inscripciones SET estado = 'CANCELADA', id_reprogramada_hacia = $1 WHERE id_inscripcion = $2",
+      [newBookingId, oldBooking.id_inscripcion]
+    );
+
+    await db.query('COMMIT');
+    res.json({ success: true, newBookingId });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    console.error('Error al reprogramar reserva:', error);
+    res.status(500).json({ error: 'Error al reprogramar la reserva.' });
   }
 });
 
@@ -1472,13 +1761,20 @@ app.post('/api/clay-deliveries', async (req, res) => {
       return res.status(400).json({ error: 'Límite mensual de arcilla alcanzado (1kg por mes). No se puede entregar más arcilla.' });
     }
 
-    // Registrar en t_deudas_insumos como entrega gratuita de arcilla mensual
+    // Fetch precio from config
+    const extraRes = await db.query("SELECT precio FROM public.t_config_extras WHERE tipo = 'ARCILLA' AND activo = true LIMIT 1");
+    let precio = 0;
+    if (extraRes.rows.length > 0) {
+      precio = parseFloat(extraRes.rows[0].precio);
+    }
+
+    // Registrar en t_deudas_insumos como entrega de arcilla mensual
     await db.query(
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, peso_gramos, precio_total, bl_pagado, fec_carga)
       VALUES 
-        ($1, 'ARCILLA', 'Entrega de Arcilla 1kg', 1000, 0, true, NOW())`,
-      [studentId]
+        ($1, 'ARCILLA', 'Entrega de Arcilla 1kg', 1000, $2, false, NOW())`,
+      [studentId, precio]
     );
 
     res.status(201).json({ success: true });
@@ -1502,10 +1798,12 @@ app.get('/api/bakes', async (req, res) => {
         COALESCE(u.nombre || ' ' || u.apellido, 'Alumno') AS student_name,
         d.fec_carga::text AS date,
         d.precio_total AS price,
-        d.metodo_pago_pte AS payment_method
+        d.metodo_pago_pte AS payment_method,
+        d.bl_pagado AS is_paid,
+        d.descripcion AS description,
+        d.tipo AS type
       FROM public.t_deudas_insumos d
       JOIN public.t_usuarios u ON d.id_usuarios = u.id_usuarios
-      WHERE d.tipo = 'HORNO'
       ORDER BY d.fec_carga DESC
     `;
     const { rows } = await db.query(bakeQuery);
@@ -1515,11 +1813,42 @@ app.get('/api/bakes', async (req, res) => {
       studentName: r.student_name,
       date: r.date,
       price: parseFloat(r.price),
-      paymentMethod: r.payment_method
+      paymentMethod: r.payment_method,
+      isPaid: r.is_paid,
+      description: r.description,
+      type: r.type
     })));
   } catch (error) {
     console.error('Error al listar horneados:', error);
     res.status(500).json({ error: 'Error al obtener horneados.' });
+  }
+});
+
+// Confirmar el pago de un insumo (por parte del admin)
+app.put('/api/insumos/:id/confirm', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const debtRes = await db.query('SELECT * FROM public.t_deudas_insumos WHERE id_deudas_insumos = $1', [id]);
+    if (debtRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Deuda de insumo no encontrada.' });
+    }
+
+    const debt = debtRes.rows[0];
+    if (debt.bl_pagado) {
+      return res.status(400).json({ error: 'El pago ya se encuentra confirmado.' });
+    }
+
+    await db.query(`
+      UPDATE public.t_deudas_insumos 
+      SET bl_pagado = true
+      WHERE id_deudas_insumos = $1
+    `, [id]);
+
+    res.json({ success: true, message: 'Pago de insumo confirmado.' });
+  } catch (error) {
+    console.error('Error al confirmar pago de insumo:', error);
+    res.status(500).json({ error: 'Error al confirmar pago de insumo.' });
   }
 });
 
@@ -1532,12 +1861,18 @@ app.post('/api/bakes', async (req, res) => {
   }
 
   try {
+    const extraRes = await db.query("SELECT precio FROM public.t_config_extras WHERE tipo = 'HORNEADO' AND activo = true LIMIT 1");
+    let finalPrice = price; // Default to provided price
+    if (extraRes.rows.length > 0) {
+      finalPrice = parseFloat(extraRes.rows[0].precio);
+    }
+
     await db.query(
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, precio_total, metodo_pago_pte, bl_pagado, fec_carga)
       VALUES 
         ($1, 'HORNO', $2, $3, NULL, false, NOW())`,
-      [studentId, description, price]
+      [studentId, description, finalPrice]
     );
 
     res.status(201).json({ success: true });
@@ -1556,13 +1891,19 @@ app.post('/api/extra-clay', async (req, res) => {
   }
 
   try {
+    const extraRes = await db.query("SELECT precio FROM public.t_config_extras WHERE tipo = 'ARCILLA' AND activo = true LIMIT 1");
+    let precio = 0;
+    if (extraRes.rows.length > 0) {
+      precio = parseFloat(extraRes.rows[0].precio);
+    }
+
     const descripcion = `Arcilla extra: ${quantity}`;
     await db.query(
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, precio_total, metodo_pago_pte, bl_pagado, fec_carga)
       VALUES 
-        ($1, 'ARCILLA', $2, 0, NULL, false, NOW())`,
-      [studentId, descripcion]
+        ($1, 'ARCILLA', $2, $3, NULL, false, NOW())`,
+      [studentId, descripcion, precio]
     );
 
     res.status(201).json({ success: true });
@@ -1639,6 +1980,41 @@ app.post('/api/payments', async (req, res) => {
   } catch (error) {
     console.error('Error al procesar pago:', error);
     res.status(500).json({ error: 'Error al registrar el pago en el servidor.' });
+  }
+});
+
+// Otorgar créditos gratis a múltiples alumnas
+app.post('/api/students/bulk-free-credits', async (req, res) => {
+  const { studentIds, creditsToAdd } = req.body;
+
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0 || !creditsToAdd) {
+    return res.status(400).json({ error: 'Faltan parámetros (studentIds array, creditsToAdd).' });
+  }
+
+  const paymentDate = new Date().toISOString();
+
+  try {
+    for (const sId of studentIds) {
+      const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [sId]);
+      if (profileRes.rows.length === 0) continue;
+
+      // 1. Insertar en t_historial_creditos para registro (monto 0)
+      await db.query(
+        `INSERT INTO public.t_historial_creditos (id_usuarios, cantidad, motivo, fec_movimiento, estado, monto)
+         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'PAID', 0)`,
+        [sId, creditsToAdd, paymentDate]
+      );
+
+      // 2. Acreditar créditos en t_cuenta_alumno
+      await db.query(
+        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+        [creditsToAdd, sId]
+      );
+    }
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Error al otorgar créditos gratis:', error);
+    res.status(500).json({ error: 'Error al otorgar los créditos gratis.' });
   }
 });
 
@@ -1775,6 +2151,29 @@ app.post('/api/payments/request', async (req, res) => {
       [studentId, creditsToAdd, amount]
     );
 
+    // Notificar a todos los admins por push
+    try {
+      const studentRes = await db.query(
+        'SELECT nombre, apellido FROM public.t_usuarios WHERE id_usuarios = $1',
+        [studentId]
+      );
+      const studentName = studentRes.rows.length > 0
+        ? `${studentRes.rows[0].nombre} ${studentRes.rows[0].apellido}`
+        : 'Una alumna';
+
+      const adminRes = await db.query(
+        "SELECT id_usuarios FROM public.t_usuarios WHERE rol IN ('ADMIN', 'SOPORTE')"
+      );
+      const adminIds = adminRes.rows.map(r => r.id_usuarios);
+      await sendPush(
+        adminIds,
+        '💰 Nueva solicitud de pago',
+        `${studentName} solicitó la compra de ${creditsToAdd} crédito${creditsToAdd === 1 ? '' : 's'} por $${Number(amount).toLocaleString('es-AR')}. Ya podés confirmarla.`
+      );
+    } catch (pushErr) {
+      console.error('[Push] Error notificando admins sobre solicitud de pago:', pushErr.message);
+    }
+
     res.json({ success: true, paymentId: rows[0].id });
   } catch (error) {
     console.error('Error al solicitar pago:', error);
@@ -1810,6 +2209,17 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
       'UPDATE public.t_historial_creditos SET estado = $1, motivo = $2, fec_movimiento = $3 WHERE id_historial_credito = $4',
       ['PAID', 'Acreditación por Pago Confirmado', updateDate, id]
     );
+
+    // Notificar a la alumna por push
+    try {
+      await sendPush(
+        payment.id_usuarios,
+        '✅ Pago confirmado',
+        `Tu pago de ${payment.cantidad} crédito${payment.cantidad === 1 ? '' : 's'} fue confirmado. ¡Ya podés reservar tus clases!`
+      );
+    } catch (pushErr) {
+      console.error('[Push] Error notificando alumna sobre confirmación de pago:', pushErr.message);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -1937,6 +2347,93 @@ app.delete('/api/packs/:id', async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar paquete:', error);
     res.status(500).json({ error: 'Error al eliminar paquete.' });
+  }
+});
+
+// ==========================================
+// 9.5. ENDPOINTS DE EXTRAS (ARCILLA, HORNEADO)
+// ==========================================
+
+const mapExtraToFE = (row) => ({
+  id: row.id_extra,
+  tipo: row.tipo,
+  name: row.nombre,
+  price: parseFloat(row.precio),
+  active: row.activo
+});
+
+app.get('/api/extras', async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM public.t_config_extras ORDER BY tipo ASC, nombre ASC');
+    res.json(rows.map(mapExtraToFE));
+  } catch (error) {
+    console.error('Error al listar extras:', error);
+    res.status(500).json({ error: 'Error al obtener extras.' });
+  }
+});
+
+app.post('/api/extras', async (req, res) => {
+  const { tipo, name, price } = req.body;
+  if (!tipo || !name || price === undefined) {
+    return res.status(400).json({ error: 'Faltan datos requeridos (tipo, name, price).' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO public.t_config_extras (tipo, nombre, precio)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [tipo, name, price]
+    );
+    res.status(201).json(mapExtraToFE(rows[0]));
+  } catch (error) {
+    console.error('Error al crear extra:', error);
+    res.status(500).json({ error: 'Error al crear extra.' });
+  }
+});
+
+app.put('/api/extras/:id', async (req, res) => {
+  const { id } = req.params;
+  const { tipo, name, price, active } = req.body;
+
+  try {
+    const { rows } = await db.query(
+      `UPDATE public.t_config_extras 
+       SET tipo = COALESCE($1, tipo),
+           nombre = COALESCE($2, nombre),
+           precio = COALESCE($3, precio),
+           activo = COALESCE($4, activo)
+       WHERE id_extra = $5
+       RETURNING *`,
+      [tipo, name, price, active, id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Extra no encontrado.' });
+    }
+
+    res.json(mapExtraToFE(rows[0]));
+  } catch (error) {
+    console.error('Error al actualizar extra:', error);
+    res.status(500).json({ error: 'Error al actualizar extra.' });
+  }
+});
+
+app.delete('/api/extras/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await db.query(
+      'DELETE FROM public.t_config_extras WHERE id_extra = $1 RETURNING *',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Extra no encontrado.' });
+    }
+    res.json({ success: true, deleted: rows[0].id_extra });
+  } catch (error) {
+    console.error('Error al eliminar extra:', error);
+    res.status(500).json({ error: 'Error al eliminar extra.' });
   }
 });
 
@@ -2101,9 +2598,12 @@ app.delete('/api/faqs/:id', async (req, res) => {
 // ==========================================
 // INICIAR SERVIDOR
 // ==========================================
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
-});
+// Comentado para Vercel: el servidor no debe escuchar en un puerto en Serverless
+// if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+//   app.listen(PORT, () => {
+//     console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+//   });
+// }
 
 // ==========================================
 // PUSH NOTIFICATIONS ENDPOINT
@@ -2135,10 +2635,10 @@ app.post('/api/push/subscribe', async (req, res) => {
 // ==========================================
 // BACKGROUND JOBS
 // ==========================================
-const runExpirationJob = async () => {
+export const runExpirationJob = async () => {
   try {
     console.log('[Job] Corriendo verificación de vencimientos de créditos...');
-    const usersRes = await db.query('SELECT id_usuario, id_usuarios, saldo_actual FROM public.t_cuenta_alumno WHERE saldo_actual > 0');
+    const usersRes = await db.query('SELECT id_usuarios, saldo_actual FROM public.t_cuenta_alumno WHERE saldo_actual > 0');
 
     for (const user of usersRes.rows) {
       const studentId = user.id_usuarios; // UUID from t_usuarios
@@ -2204,7 +2704,12 @@ const runExpirationJob = async () => {
   }
 };
 
-// Ejecutar al iniciar el servidor
-setTimeout(runExpirationJob, 5000);
-// Ejecutar cada 1 hora
-setInterval(runExpirationJob, 60 * 60 * 1000);
+// Ejecutar al iniciar el servidor (localmente)
+// Comentado para Vercel: Serverless functions no pueden mantener setIntervals
+// if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+//   setTimeout(runExpirationJob, 5000);
+//   // Ejecutar cada 1 hora
+//   setInterval(runExpirationJob, 60 * 60 * 1000);
+// }
+
+export default app;

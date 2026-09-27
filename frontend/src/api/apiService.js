@@ -1,4 +1,8 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5005/api';
+let baseApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5005/api';
+if (baseApiUrl && !baseApiUrl.endsWith('/api') && !baseApiUrl.endsWith('/api/')) {
+  baseApiUrl = baseApiUrl.endsWith('/') ? `${baseApiUrl}api` : `${baseApiUrl}/api`;
+}
+const API_URL = baseApiUrl;
 
 const handleResponse = async (response) => {
   if (!response.ok) {
@@ -51,6 +55,15 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  resendWelcomeEmails: async (studentIds) => {
+    const res = await fetch(`${API_URL}/users/resend-welcome-bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentIds })
+    });
+    return handleResponse(res);
+  },
+
   recordStudentPayment: async (studentIds, amount, creditsToAdd, date) => {
     const res = await fetch(`${API_URL}/payments`, {
       method: 'POST',
@@ -60,11 +73,29 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  grantBulkFreeCredits: async (studentIds, creditsToAdd) => {
+    const res = await fetch(`${API_URL}/students/bulk-free-credits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentIds, creditsToAdd })
+    });
+    return handleResponse(res);
+  },
+
   login: async (email, password) => {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
+    });
+    return handleResponse(res);
+  },
+
+  switchProfile: async (id) => {
+    const res = await fetch(`${API_URL}/auth/switch-profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
     });
     return handleResponse(res);
   },
@@ -83,6 +114,15 @@ export const apiService = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: newRole })
+    });
+    return handleResponse(res);
+  },
+
+  updateUserSecondaryRole: async (userId, secondaryRole) => {
+    const res = await fetch(`${API_URL}/users/${userId}/secondary-role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secondaryRole })
     });
     return handleResponse(res);
   },
@@ -222,11 +262,14 @@ export const apiService = {
 
   updateBooking: async (bookingId, updates) => {
     // Si la actualización es para cancelar la clase
-    if (updates.status === 'CANCELLED' || updates.status === 'CANCELLED_LATE') {
+    if (updates.status === 'CANCELLED' || updates.status === 'CANCELLED_LATE' || updates.status === 'CANCELLED_REFUND') {
       const res = await fetch(`${API_URL}/bookings/${bookingId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ forceLate: updates.status === 'CANCELLED_LATE' })
+        body: JSON.stringify({ 
+          forceLate: updates.status === 'CANCELLED_LATE',
+          forceRefund: updates.status === 'CANCELLED_REFUND'
+        })
       });
       return handleResponse(res);
     }
@@ -345,6 +388,14 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  confirmInsumoPayment: async (insumoId) => {
+    const res = await fetch(`${API_URL}/insumos/${insumoId}/confirm`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
   notifyPaymentReminder: async (paymentId) => {
     const res = await fetch(`${API_URL}/payments/${paymentId}/notify`, {
       method: 'POST'
@@ -437,6 +488,37 @@ export const apiService = {
 
   deletePack: async (packId) => {
     const res = await fetch(`${API_URL}/packs/${packId}`, {
+      method: 'DELETE'
+    });
+    return handleResponse(res);
+  },
+
+  // --- EXTRAS (ARCILLA, HORNEADO) ---
+  getExtras: async () => {
+    const res = await fetch(`${API_URL}/extras`);
+    return handleResponse(res);
+  },
+
+  createExtra: async (extraData) => {
+    const res = await fetch(`${API_URL}/extras`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(extraData)
+    });
+    return handleResponse(res);
+  },
+
+  updateExtra: async (extraId, extraData) => {
+    const res = await fetch(`${API_URL}/extras/${extraId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(extraData)
+    });
+    return handleResponse(res);
+  },
+
+  deleteExtra: async (extraId) => {
+    const res = await fetch(`${API_URL}/extras/${extraId}`, {
       method: 'DELETE'
     });
     return handleResponse(res);

@@ -136,6 +136,7 @@ export const mockService = {
       fecha_nacimiento: u.fecha_nacimiento || null,
       bl_cambio_pass_pte: u.bl_cambio_pass_pte || false,
       sucursal: u.sucursal || 'CENTRO',
+      genero: u.genero || null,
       created_at: u.created_at || null
     };
   },
@@ -161,6 +162,7 @@ export const mockService = {
       bl_cambio_pass_pte: u.bl_cambio_pass_pte || false,
       created_at: u.created_at || new Date().toISOString(),
       sucursal: u.sucursal || 'CENTRO',
+      genero: u.genero || null,
       active: u.active !== false
     };
   },
@@ -193,6 +195,21 @@ export const mockService = {
       setStorageItem('tuti_student_profiles', profiles);
     }
     return feUser;
+  },
+
+  resendWelcomeEmails: async (studentIds) => {
+    await delay();
+    const rawUsers = getStorageItem('tuti_users', initialUsers);
+    let count = 0;
+    for (const u of rawUsers) {
+      if (studentIds.includes(u.id_usuario)) {
+        u.clave = 'tuti123';
+        u.bl_cambio_pass_pte = true;
+        count++;
+      }
+    }
+    setStorageItem('tuti_users', rawUsers);
+    return { success: true, count };
   },
 
   login: async (email, password) => {
