@@ -510,6 +510,17 @@ export const AppProvider = ({ children }) => {
     ]);
   };
 
+  const grantBulkFreeCreditsAction = async (studentIds, creditsToAdd) => {
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      throw new Error("Debe seleccionar al menos una alumna");
+    }
+    await mockService.grantBulkFreeCredits(studentIds, creditsToAdd);
+    await Promise.all([
+      mockService.getStudentProfiles().then(setStudentProfiles),
+      mockService.getPayments().then(setPayments),
+    ]);
+  };
+
   const confirmPendingPayment = async (paymentId, confirmationDate) => {
     const prevPayments = payments;
     const prevProfiles = studentProfiles;
@@ -916,6 +927,7 @@ export const AppProvider = ({ children }) => {
         deliverClayToStudent,
         createBake,
         recordStudentPayment,
+        grantBulkFreeCreditsAction,
         confirmPendingPayment,
         confirmInsumoPayment,
         sendTransferReminder,

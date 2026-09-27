@@ -13,6 +13,8 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
   const [filterActivePacks, setFilterActivePacks] = useState(false); // toggle active packs
   const [expandedStudentId, setExpandedStudentId] = useState(null);
   const [isResending, setIsResending] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const { grantBulkFreeCreditsAction } = useApp();
 
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
@@ -98,6 +100,32 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
     if (!name) return '';
     const parts = name.trim().split(/\s+/);
     return parts.map(p => p[0]).join('').toUpperCase().substring(0, 3);
+  };
+
+  const toggleSelection = (id) => {
+    setSelectedStudentIds(prev =>
+      prev.includes(id) ? prev.filter(sId => sId !== id) : [...prev, id]
+    );
+  };
+
+  const handleGrantFreeCredits = async () => {
+    if (selectedStudentIds.length === 0) return;
+    const qtyStr = window.prompt(`¿Cuántos créditos gratis deseas otorgar a las ${selectedStudentIds.length} alumnas seleccionadas?`, '1');
+    if (!qtyStr) return; // cancelled
+    const qty = parseInt(qtyStr, 10);
+    if (isNaN(qty) || qty <= 0) {
+      showFeedback('Cantidad inválida.', 'danger');
+      return;
+    }
+    if (!window.confirm(`¿Confirmas que deseas regalar ${qty} crédito(s) a ${selectedStudentIds.length} alumna(s)?`)) return;
+
+    try {
+      await grantBulkFreeCreditsAction(selectedStudentIds, qty);
+      showFeedback(`Se otorgaron ${qty} créditos a ${selectedStudentIds.length} alumna(s) con éxito.`, 'success');
+      setSelectedStudentIds([]); // clear selection
+    } catch (err) {
+      showFeedback(err.message, 'danger');
+    }
   };
 
   return (
@@ -363,7 +391,24 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
 
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
+            {selectedStudentIds.length > 0 ? (
+              <button
+                onClick={handleGrantFreeCredits}
+                style={{
+                  padding: '10px 16px', borderRadius: '16px', border: 'none',
+                  backgroundColor: 'var(--marron-arcilla)', color: 'var(--blanco)',
+                  fontSize: '12px', fontWeight: 800, cursor: 'pointer', transition: 'opacity 0.2s',
+                  display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = 0.9}
+                onMouseOut={e => e.currentTarget.style.opacity = 1}
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Regalar Créditos ({selectedStudentIds.length})
+              </button>
+            ) : <div />}
+
             <button
               disabled={isResending || filteredStudents.length === 0}
               onClick={async () => {
@@ -425,6 +470,21 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
                     >
                       {/* Fila Principal de Información */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+                        
+                        {/* Checkbox de selección */}
+                        <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, padding: '4px' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedStudentIds.includes(st.id)}
+                            onChange={() => toggleSelection(st.id)}
+                            style={{ 
+                              width: '20px', height: '20px', cursor: 'pointer', 
+                              accentColor: 'var(--verde-oliva)', margin: 0,
+                              borderRadius: '4px', border: '1px solid var(--gris-claro)'
+                            }} 
+                          />
+                        </div>
+
                         {/* Círculo con Iniciales */}
                         <div style={{
                           width: '48px',
