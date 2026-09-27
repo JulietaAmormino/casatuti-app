@@ -2563,11 +2563,12 @@ app.delete('/api/faqs/:id', async (req, res) => {
 // ==========================================
 // INICIAR SERVIDOR
 // ==========================================
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
-  });
-}
+// Comentado para Vercel: el servidor no debe escuchar en un puerto en Serverless
+// if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+//   app.listen(PORT, () => {
+//     console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+//   });
+// }
 
 // ==========================================
 // PUSH NOTIFICATIONS ENDPOINT
@@ -2599,7 +2600,7 @@ app.post('/api/push/subscribe', async (req, res) => {
 // ==========================================
 // BACKGROUND JOBS
 // ==========================================
-const runExpirationJob = async () => {
+export const runExpirationJob = async () => {
   try {
     console.log('[Job] Corriendo verificación de vencimientos de créditos...');
     const usersRes = await db.query('SELECT id_usuarios, saldo_actual FROM public.t_cuenta_alumno WHERE saldo_actual > 0');
@@ -2669,10 +2670,11 @@ const runExpirationJob = async () => {
 };
 
 // Ejecutar al iniciar el servidor (localmente)
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
-  setTimeout(runExpirationJob, 5000);
-  // Ejecutar cada 1 hora
-  setInterval(runExpirationJob, 60 * 60 * 1000);
-}
+// Comentado para Vercel: Serverless functions no pueden mantener setIntervals
+// if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+//   setTimeout(runExpirationJob, 5000);
+//   // Ejecutar cada 1 hora
+//   setInterval(runExpirationJob, 60 * 60 * 1000);
+// }
 
 export default app;
