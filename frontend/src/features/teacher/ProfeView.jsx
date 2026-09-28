@@ -81,9 +81,12 @@ export default function ProfeView({ activeTab, setActiveTab }) {
         return (
           <AlumnosTabProfe 
             currentUser={currentUser}
+            users={users}
             classes={filteredClasses}
             bookings={bookings}
             studentProfiles={studentProfiles}
+            selectedBranch={selectedBranch}
+            myBranches={myBranches}
           />
         );
       case 'insumos':
