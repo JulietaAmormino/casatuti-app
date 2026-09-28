@@ -45,7 +45,7 @@ export default function AlumnosTabProfe({ currentUser, classes, bookings, studen
   return (
     <div className="animate-slide-up">
       <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)', marginBottom: '16px' }}>
-        Directorio de Alumnos/as
+        Directorio de Alumnos/as <span style={{ fontSize: '10px', color: 'gray' }}>(v2)</span>
       </h3>
 
       {/* Buscador */}
