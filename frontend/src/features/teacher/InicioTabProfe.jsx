@@ -321,7 +321,7 @@ export default function InicioTabProfe({
                 {(() => {
                   const ids = new Set();
                   bookings.forEach(b => {
-                    if (myClasses.some(c => c.id === b.classId) && b.status !== 'CANCELLED') {
+                    if (myClasses.some(c => String(c.id) === String(b.classId)) && b.status !== 'CANCELLED') {
                       ids.add(b.studentId);
                     }
                   });
