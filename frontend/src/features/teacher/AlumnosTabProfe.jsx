@@ -1,37 +1,33 @@
 import React, { useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 
-export default function AlumnosTabProfe({ currentUser, classes, bookings, studentProfiles }) {
+export default function AlumnosTabProfe({ currentUser, users, classes, bookings, studentProfiles, selectedBranch, myBranches }) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Obtener las clases del profesor
-  const myClasses = classes.filter(c => 
-    (c.teacherIds && c.teacherIds.some(id => String(id) === String(currentUser.id))) || 
-    String(c.teacherId) === String(currentUser.id)
-  );
-  const myClassesIds = myClasses.map(c => String(c.id));
-
-  // 2. Obtener todos los alumnos que tienen alguna reserva en las clases del profesor
-  const myStudentsMap = new Map();
-  bookings.forEach(b => {
-    if (myClassesIds.includes(String(b.classId)) && b.status !== 'CANCELLED') {
-      if (!myStudentsMap.has(b.studentId)) {
-        myStudentsMap.set(b.studentId, {
-          id: b.studentId,
-          name: b.studentName,
-          classes: new Set([classes.find(c => String(c.id) === String(b.classId))?.name])
-        });
-      } else {
-        myStudentsMap.get(b.studentId).classes.add(classes.find(c => String(c.id) === String(b.classId))?.name);
+  // 1. Obtener todos los alumnos registrados en el sistema
+  // Y filtrarlos por la sucursal seleccionada (o las sucursales del profe si es "ALL")
+  const baseStudents = users.filter(u => {
+    if (u.role !== 'ALUMNO') return false;
+    
+    if (selectedBranch === 'ALL') {
+      // Si el profe seleccionó "Todas", mostrar los alumnos de todas las sucursales donde el profe da clases
+      // O si el profe no tiene sucursales todavía, al menos no romperse.
+      if (myBranches && myBranches.length > 0) {
+        return myBranches.includes(u.sucursal);
       }
+      return true; // fallback
+    } else {
+      // Si seleccionó una sucursal específica, mostrar solo alumnos de esa sucursal
+      return u.sucursal === selectedBranch;
     }
   });
 
-  const myStudents = Array.from(myStudentsMap.values()).map(s => {
+  // 2. Combinar con studentProfiles para obtener los créditos y arcilla
+  const myStudents = baseStudents.map(s => {
     const profile = studentProfiles.find(p => p.studentId === s.id) || { classCredits: 0, monthlyClayKg: 0 };
     return {
       ...s,
-      classes: Array.from(s.classes).join(', '),
+      classes: '-', // Ya no dependemos de las inscripciones para esto, mostramos genérico o nada
       credits: profile.classCredits,
       clay: profile.monthlyClayKg
     };
@@ -39,7 +35,7 @@ export default function AlumnosTabProfe({ currentUser, classes, bookings, studen
 
   // 3. Filtrar por búsqueda
   const filteredStudents = myStudents.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+    s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -64,19 +60,7 @@ export default function AlumnosTabProfe({ currentUser, classes, bookings, studen
       {/* Lista de Alumnos */}
       {filteredStudents.length === 0 ? (
         <div className="clay-card" style={{ textAlign: 'center', padding: '24px', color: 'var(--gris-medio)' }}>
-          <p style={{ fontStyle: 'italic', margin: 0 }}>No se encontraron alumnos/as.</p>
-          <div style={{ marginTop: '20px', fontSize: '11px', textAlign: 'left', background: '#f5f5f5', padding: '10px', borderRadius: '8px' }}>
-            <strong>Debug Diagnostics (v3):</strong><br/>
-            - currentUser.id: {currentUser?.id}<br/>
-            - Total classes passed: {classes?.length}<br/>
-            - myClasses matched: {myClasses?.length}<br/>
-            - myClassesIds: {myClassesIds?.join(', ')}<br/>
-            - Total bookings passed: {bookings?.length}<br/>
-            - Bookings matching my classes: {bookings?.filter(b => myClassesIds.includes(String(b.classId))).length}<br/>
-            - Bookings not cancelled: {bookings?.filter(b => myClassesIds.includes(String(b.classId)) && b.status !== 'CANCELLED').length}<br/>
-            - myStudentsMap size: {myStudentsMap.size}<br/>
-            - searchTerm: "{searchTerm}"
-          </div>
+          <p style={{ fontStyle: 'italic', margin: 0 }}>No se encontraron alumnos/as en esta sucursal.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
