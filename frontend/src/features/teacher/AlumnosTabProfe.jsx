@@ -65,6 +65,18 @@ export default function AlumnosTabProfe({ currentUser, classes, bookings, studen
       {filteredStudents.length === 0 ? (
         <div className="clay-card" style={{ textAlign: 'center', padding: '24px', color: 'var(--gris-medio)' }}>
           <p style={{ fontStyle: 'italic', margin: 0 }}>No se encontraron alumnos/as.</p>
+          <div style={{ marginTop: '20px', fontSize: '11px', textAlign: 'left', background: '#f5f5f5', padding: '10px', borderRadius: '8px' }}>
+            <strong>Debug Diagnostics (v3):</strong><br/>
+            - currentUser.id: {currentUser?.id}<br/>
+            - Total classes passed: {classes?.length}<br/>
+            - myClasses matched: {myClasses?.length}<br/>
+            - myClassesIds: {myClassesIds?.join(', ')}<br/>
+            - Total bookings passed: {bookings?.length}<br/>
+            - Bookings matching my classes: {bookings?.filter(b => myClassesIds.includes(String(b.classId))).length}<br/>
+            - Bookings not cancelled: {bookings?.filter(b => myClassesIds.includes(String(b.classId)) && b.status !== 'CANCELLED').length}<br/>
+            - myStudentsMap size: {myStudentsMap.size}<br/>
+            - searchTerm: "{searchTerm}"
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
