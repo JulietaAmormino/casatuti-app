@@ -5,20 +5,24 @@ export default function AlumnosTabProfe({ currentUser, classes, bookings, studen
   const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Obtener las clases del profesor
-  const myClassesIds = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id).map(c => c.id);
+  const myClasses = classes.filter(c => 
+    (c.teacherIds && c.teacherIds.some(id => String(id) === String(currentUser.id))) || 
+    String(c.teacherId) === String(currentUser.id)
+  );
+  const myClassesIds = myClasses.map(c => String(c.id));
 
   // 2. Obtener todos los alumnos que tienen alguna reserva en las clases del profesor
   const myStudentsMap = new Map();
   bookings.forEach(b => {
-    if (myClassesIds.includes(b.classId) && b.status !== 'CANCELLED') {
+    if (myClassesIds.includes(String(b.classId)) && b.status !== 'CANCELLED') {
       if (!myStudentsMap.has(b.studentId)) {
         myStudentsMap.set(b.studentId, {
           id: b.studentId,
           name: b.studentName,
-          classes: new Set([classes.find(c => c.id === b.classId)?.name])
+          classes: new Set([classes.find(c => String(c.id) === String(b.classId))?.name])
         });
       } else {
-        myStudentsMap.get(b.studentId).classes.add(classes.find(c => c.id === b.classId)?.name);
+        myStudentsMap.get(b.studentId).classes.add(classes.find(c => String(c.id) === String(b.classId))?.name);
       }
     }
   });
