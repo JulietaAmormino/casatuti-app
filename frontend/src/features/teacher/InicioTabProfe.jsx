@@ -272,65 +272,74 @@ export default function InicioTabProfe({
       </div>
       
       <div className="stats-dashboard-grid">
-        {/* Card Mis Clases */}
+        {/* Card 1: Large (Mis Clases) */}
         <div 
           onClick={() => setShowAllClassesModal(true)}
           className="stat-card-modern stat-card-modern-large" 
-          style={{ 
-            backgroundColor: 'var(--card-mustard)',
-            cursor: 'pointer',
-            transition: 'transform 0.2s',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          style={{ backgroundColor: '#F9E4B7', color: 'var(--gris-oscuro)', boxShadow: '0 8px 24px rgba(249,228,183,0.4)', borderRadius: '32px' }}
         >
-          <div className="stat-card-modern-icon">
-            <span style={{ fontSize: '24px' }}>🧑‍🏫</span>
-          </div>
-          <div className="stat-card-modern-content">
-            <div className="stat-card-modern-number">{myClasses.length}</div>
-            <div className="stat-card-modern-label">Clases<br />asignadas</div>
-          </div>
-        </div>
-
-        {/* Card Alumnos totales */}
-        <div className="stat-card-modern" style={{ backgroundColor: 'var(--card-sage)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div className="stat-card-modern-content">
-              {/* Aproximación de alumnos (total de reservas confirmadas) */}
-              <div className="stat-card-modern-number">
-                {bookings.filter(b => myClasses.some(c => c.id === b.classId) && b.status !== 'CANCELLED').length}
-              </div>
-              <div className="stat-card-modern-label">Reservas<br />activas</div>
+            <div style={{
+              width: '44px', height: '44px', 
+              border: '1px solid rgba(0,0,0,0.05)',
+              borderRadius: '14px',
+              display: 'flex', justifyContent: 'center', alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.3)'
+            }}>
+              <span style={{ fontSize: '22px' }}>🧑‍🏫</span>
             </div>
-            <div className="stat-card-modern-icon" style={{ width: '40px', height: '40px' }}>
-              <span style={{ fontSize: '18px' }}>🏺</span>
+          </div>
+
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ fontSize: '56px', fontWeight: 900, letterSpacing: '-2px', lineHeight: 1 }}>{myClasses.length}</span>
+              <span style={{ fontSize: '18px', fontWeight: 800 }}>clases</span>
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '4px', opacity: 0.85 }}>Asignadas a tu cargo</div>
+            <div style={{ fontSize: '14px', fontWeight: 900, textDecoration: 'underline', textUnderlineOffset: '4px', marginTop: '20px', cursor: 'pointer' }}>
+              Ver todas →
             </div>
           </div>
         </div>
 
-        {/* Card Insumos (Horneados y Arcilla) */}
+        {/* Card 2: Top Right (Reservas activas) */}
+        <div className="stat-card-modern" style={{ backgroundColor: '#D98361', padding: '24px', boxShadow: '0 8px 24px rgba(217,131,97,0.3)', borderRadius: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF' }}>COMUNIDAD</div>
+            <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <span style={{ fontSize: '20px' }}>🏺</span>
+            </div>
+          </div>
+          
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', color: '#FFF' }}>
+              <span style={{ fontSize: '38px', fontWeight: 900, lineHeight: 1 }}>
+                {bookings.filter(b => myClasses.some(c => c.id === b.classId) && b.status !== 'CANCELLED').length}
+              </span>
+              <span style={{ fontSize: '14px', fontWeight: 700 }}>activos</span>
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'rgba(255,255,255,0.9)' }}>Reservas en tus clases</div>
+          </div>
+        </div>
+
+        {/* Card 3: Bottom Right (Insumos) */}
         <div 
           onClick={() => setActiveTab('insumos')}
           className="stat-card-modern" 
-          style={{ 
-            backgroundColor: 'var(--card-brown)',
-            cursor: 'pointer',
-            transition: 'transform 0.2s',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          style={{ backgroundColor: '#879C8A', padding: '24px', boxShadow: '0 8px 24px rgba(135,156,138,0.3)', borderRadius: '32px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div className="stat-card-modern-content">
-              <div style={{ fontSize: '16px', fontWeight: 800, fontFamily: 'var(--font-sans)', lineHeight: '1.2', letterSpacing: '-0.3px', marginBottom: '4px' }}>
-                Horneados y<br/>Arcilla Extra
-              </div>
-              <div className="stat-card-modern-label">Registrar insumos</div>
+            <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF' }}>INSUMOS</div>
+            <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <span style={{ fontSize: '20px' }}>🔥</span>
             </div>
-            <div className="stat-card-modern-icon" style={{ width: '40px', height: '40px' }}>
-              <span style={{ fontSize: '18px' }}>🔥</span>
+          </div>
+          
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#FFF', lineHeight: 1.2, letterSpacing: '-0.3px', marginBottom: '4px' }}>
+              Horneados y<br/>Arcilla Extra
             </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>Registrar gastos</div>
           </div>
         </div>
       </div>
