@@ -302,10 +302,14 @@ export default function InicioTabProfe({
           </div>
         </div>
 
-        {/* Card 2: Top Right (Reservas activas) */}
-        <div className="stat-card-modern" style={{ backgroundColor: '#D98361', padding: '24px', boxShadow: '0 8px 24px rgba(217,131,97,0.3)', borderRadius: '32px' }}>
+        {/* Card 2: Top Right (Alumnos) */}
+        <div 
+          onClick={() => setActiveTab('alumnos')}
+          className="stat-card-modern" 
+          style={{ backgroundColor: '#D98361', padding: '24px', boxShadow: '0 8px 24px rgba(217,131,97,0.3)', borderRadius: '32px', cursor: 'pointer' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF' }}>COMUNIDAD</div>
+            <div style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', color: '#FFF' }}>ALUMNOS</div>
             <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <span style={{ fontSize: '20px' }}>🏺</span>
             </div>
@@ -314,11 +318,19 @@ export default function InicioTabProfe({
           <div style={{ marginTop: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', color: '#FFF' }}>
               <span style={{ fontSize: '38px', fontWeight: 900, lineHeight: 1 }}>
-                {bookings.filter(b => myClasses.some(c => c.id === b.classId) && b.status !== 'CANCELLED').length}
+                {(() => {
+                  const ids = new Set();
+                  bookings.forEach(b => {
+                    if (myClasses.some(c => c.id === b.classId) && b.status !== 'CANCELLED') {
+                      ids.add(b.studentId);
+                    }
+                  });
+                  return ids.size;
+                })()}
               </span>
               <span style={{ fontSize: '14px', fontWeight: 700 }}>activos</span>
             </div>
-            <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'rgba(255,255,255,0.9)' }}>Reservas en tus clases</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'rgba(255,255,255,0.9)' }}>Tus alumnos inscriptos</div>
           </div>
         </div>
 
