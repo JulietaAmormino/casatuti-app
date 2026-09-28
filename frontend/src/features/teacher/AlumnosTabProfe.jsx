@@ -9,16 +9,17 @@ export default function AlumnosTabProfe({ currentUser, users, classes, bookings,
   const baseStudents = users.filter(u => {
     if (u.role !== 'ALUMNO') return false;
     
+    // Normalizar sucursal del usuario a mayúsculas
+    const userBranches = (u.sucursal || 'CENTRO').toUpperCase();
+    
     if (selectedBranch === 'ALL') {
-      // Si el profe seleccionó "Todas", mostrar los alumnos de todas las sucursales donde el profe da clases
-      // O si el profe no tiene sucursales todavía, al menos no romperse.
       if (myBranches && myBranches.length > 0) {
-        return myBranches.includes(u.sucursal);
+        // Verificar si alguna de las sucursales del usuario coincide con las del profe
+        return myBranches.some(branch => userBranches.includes(branch.toUpperCase()));
       }
       return true; // fallback
     } else {
-      // Si seleccionó una sucursal específica, mostrar solo alumnos de esa sucursal
-      return u.sucursal === selectedBranch;
+      return userBranches.includes(selectedBranch.toUpperCase());
     }
   });
 
