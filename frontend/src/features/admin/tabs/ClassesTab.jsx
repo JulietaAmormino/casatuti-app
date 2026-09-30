@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../../context/AppContext';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 
@@ -233,7 +234,7 @@ export default function ClassesTab({ showFeedback }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
       {/* 1. VISTA DE CREACIÓN / REGISTRO */}
-      {mode === 'create' && (
+      {mode === 'create' && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(30, 27, 22, 0.4)', backdropFilter: 'blur(4px)',
@@ -420,11 +421,12 @@ export default function ClassesTab({ showFeedback }) {
             </button>
           </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 2. VISTA DE EDICIÓN */}
-      {mode === 'edit' && (
+      {mode === 'edit' && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(30, 27, 22, 0.4)', backdropFilter: 'blur(4px)',
@@ -578,7 +580,8 @@ export default function ClassesTab({ showFeedback }) {
             </button>
           </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 3. VISTA DE CONSULTA / LISTADO */}

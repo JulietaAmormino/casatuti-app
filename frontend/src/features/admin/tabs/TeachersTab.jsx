@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../../context/AppContext';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { Select, MenuItem, Checkbox, ListItemText, OutlinedInput } from '@mui/material';
@@ -125,7 +126,7 @@ export default function TeachersTab({ showFeedback, onEdit }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
       {/* Vista de Registro / Alta */}
-      {mode === 'create' && (
+      {mode === 'create' && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(30, 27, 22, 0.4)', backdropFilter: 'blur(4px)',
@@ -254,7 +255,8 @@ export default function TeachersTab({ showFeedback, onEdit }) {
             </button>
           </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Vista de Listado */}
@@ -619,7 +621,7 @@ export default function TeachersTab({ showFeedback, onEdit }) {
       )}
 
       {/* 4. MODAL POPUP PARA ASIGNAR MULTIPLES TURNOS */}
-      {showAssignModal && assignModalTeacher && (
+      {showAssignModal && assignModalTeacher && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed',
           top: 0,
@@ -874,7 +876,8 @@ export default function TeachersTab({ showFeedback, onEdit }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Estilos CSS Inyectados */}
