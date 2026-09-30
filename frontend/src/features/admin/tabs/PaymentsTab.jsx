@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../../context/AppContext';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
@@ -414,7 +415,7 @@ export default function PaymentsTab({ showFeedback }) {
 
 
       {/* Modal de Pago Manual */}
-      {showManualPaymentModal && (
+      {showManualPaymentModal && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(30, 27, 22, 0.4)', backdropFilter: 'blur(4px)',
@@ -518,7 +519,8 @@ export default function PaymentsTab({ showFeedback }) {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Contenido Pagos Confirmados */}
@@ -836,7 +838,7 @@ export default function PaymentsTab({ showFeedback }) {
       </button>
 
       {/* Modal de Confirmación de Fecha */}
-      {confirmModalData && (
+      {confirmModalData && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(30, 27, 22, 0.4)', backdropFilter: 'blur(4px)',
@@ -894,7 +896,8 @@ export default function PaymentsTab({ showFeedback }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Estilos CSS Inyectados */}

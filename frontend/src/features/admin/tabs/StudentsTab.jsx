@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../../context/AppContext';
 
 export default function StudentsTab({ showFeedback, onEdit, initialFilter, onClearFilter }) {
@@ -132,7 +133,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
       {/* Vista de Registro / Alta */}
-      {mode === 'create' && (
+      {mode === 'create' && createPortal(
         <div className="tuti-modal" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(30, 27, 22, 0.4)', backdropFilter: 'blur(4px)',
@@ -217,7 +218,8 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
             </button>
           </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Vista de Consulta / Listado */}
