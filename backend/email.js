@@ -63,7 +63,7 @@ export const sendWelcomeEmail = async (to, name, tempPassword, rulesHtml, genero
         <p>Estamos muy felices de que te unas a nuestro taller.</p>
         
         <h3 style="color: #a84231;">Tus credenciales de acceso</h3>
-        <p>Tu cuenta ha sido creada exitosamente. Para ingresar a la plataforma, utiliza los siguientes datos:</p>
+        <p>Tu cuenta ha sido creada exitosamente. Para ingresar a la plataforma, utiliza los siguientes datos ingresando a <a href="https://casatuti-app-espaciocreativo.vercel.app/" target="_blank" style="color: #455f3e; font-weight: bold;">https://casatuti-app-espaciocreativo.vercel.app/</a>:</p>
         <ul>
           <li><strong>Email:</strong> ${to}</li>
           <li><strong>Contraseña provisoria:</strong> <span style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px;">${tempPassword}</span></li>
