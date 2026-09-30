@@ -520,7 +520,7 @@ export default function PaymentsTab({ showFeedback }) {
             </form>
           </div>
         </div>,
-        document.body
+        document.getElementById('root') || document.body
       )}
 
       {/* Contenido Pagos Confirmados */}

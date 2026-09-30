@@ -256,7 +256,7 @@ export default function TeachersTab({ showFeedback, onEdit }) {
           </form>
           </div>
         </div>,
-        document.body
+        document.getElementById('root') || document.body
       )}
 
       {/* Vista de Listado */}

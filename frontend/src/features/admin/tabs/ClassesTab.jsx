@@ -422,7 +422,7 @@ export default function ClassesTab({ showFeedback }) {
           </form>
           </div>
         </div>,
-        document.body
+        document.getElementById('root') || document.body
       )}
 
       {/* 2. VISTA DE EDICIÓN */}
@@ -581,7 +581,7 @@ export default function ClassesTab({ showFeedback }) {
           </form>
           </div>
         </div>,
-        document.body
+        document.getElementById('root') || document.body
       )}
 
       {/* 3. VISTA DE CONSULTA / LISTADO */}

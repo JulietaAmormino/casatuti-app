@@ -21,6 +21,12 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
     user?.sucursal ? user.sucursal.split(',').map(s => s.trim().toUpperCase()) : (branches.length > 0 ? [branches[0].name.toUpperCase()] : ['CENTRO'])
   );
 
+  React.useEffect(() => {
+    if (user?.sucursal) {
+      setSelectedBranches(user.sucursal.split(',').map(s => s.trim().toUpperCase()));
+    }
+  }, [user?.sucursal]);
+
   const getTitle = () => {
     if (isTeacher) {
       if (genero === 'F') return 'Modificar profesora';

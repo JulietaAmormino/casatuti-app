@@ -219,7 +219,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
           </form>
           </div>
         </div>,
-        document.body
+        document.getElementById('root') || document.body
       )}
 
       {/* Vista de Consulta / Listado */}
