@@ -42,7 +42,7 @@ export const apiService = {
 
   // --- USUARIOS ---
   getUsers: async () => {
-    const res = await fetch(`${API_URL}/users`);
+    const res = await fetch(`${API_URL}/users`, { cache: 'no-store' });
     return handleResponse(res);
   },
 
