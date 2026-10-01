@@ -212,8 +212,8 @@ export default function EditUserModal({ userId, onClose, showFeedback }) {
             <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gris-medio)' }}>Rol Secundario</label>
             <select className="input-tuti" value={secondaryRole} onChange={e => setSecondaryRole(e.target.value)} style={{ width: '100%', cursor: 'pointer' }}>
               <option value="">Ninguno</option>
-              <option value="PROFE">PROFE (Profesor)</option>
-              <option value="ADMIN">ADMIN (Administrador)</option>
+              {user?.role !== 'PROFE' && <option value="PROFE">PROFE (Profesor)</option>}
+              {user?.role !== 'ADMIN' && <option value="ADMIN">ADMIN (Administrador)</option>}
             </select>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
