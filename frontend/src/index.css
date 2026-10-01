@@ -846,11 +846,13 @@ input {
   bottom: 0;
   background-color: rgba(15, 23, 42, 0.4);
   display: flex;
-  align-items: center;
+  align-items: flex-start !important; /* Fix for mobile top cutoff */
   justify-content: center;
   z-index: 9999;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  overflow-y: auto !important; /* Allow overlay to scroll */
+  padding: 40px 20px !important;
 }
 
 .modal-content {
@@ -1119,6 +1121,14 @@ input {
 /* --- MODAL OVERLAYS AND BODY SCROLL LOCK PREVENTING NAVBAR OVERLAP --- */
 .tuti-modal {
   z-index: 9999 !important;
+  align-items: flex-start !important;
+  overflow-y: auto !important;
+  padding: 40px 20px !important;
+}
+
+.tuti-modal > *,
+.modal-overlay > * {
+  margin: auto !important;
 }
 
 body:has(.tuti-modal),
