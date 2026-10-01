@@ -154,11 +154,20 @@ export default function ClasesTabProfe({
       return;
     }
     try {
+      let finalDescription = 'Horneado de piezas';
+      if (bakeModal.paymentMethod === 'CONTADO') {
+        finalDescription += ' (Pagado en Efectivo)';
+      } else if (bakeModal.paymentMethod === 'TRANSF') {
+        finalDescription += ' (Pagado por Transferencia)';
+      } else if (bakeModal.paymentMethod === 'COMBINADO') {
+        finalDescription += ` (Pago Combinado: $${bakeModal.amountCash || 0} Efvo, $${bakeModal.amountTransfer || 0} Transf)`;
+      }
+
       setErrorMessage('');
       await createBake({
         studentId: bakeModal.studentId,
         price: parseFloat(bakeModal.price),
-        paymentMethod: bakeModal.paymentMethod
+        description: finalDescription
       });
       setSuccessMessage(`¡Se registró el horneado para ${bakeModal.studentName}!`);
       setTimeout(() => setSuccessMessage(''), 4000);
