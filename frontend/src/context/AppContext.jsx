@@ -443,18 +443,9 @@ export const AppProvider = ({ children }) => {
 
     // Optimistic
     setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: attendanceStatus } : b));
-    if (attendanceStatus === 'ATTENDED' && booking.status !== 'ATTENDED') {
-      setStudentProfiles(prev => prev.map(p =>
-        p.studentId === studentId ? { ...p, classCredits: Math.max(0, p.classCredits - 1) } : p
-      ));
-    }
 
     try {
       if (attendanceStatus === 'ATTENDED') {
-        if (booking.status !== 'ATTENDED') {
-          const newCredits = Math.max(0, profile.classCredits - 1);
-          await mockService.updateStudentProfile(studentId, { classCredits: newCredits });
-        }
         await mockService.updateBooking(bookingId, { status: 'ATTENDED' });
       } else if (attendanceStatus === 'ABSENT') {
         await mockService.updateBooking(bookingId, { status: 'ABSENT' });
