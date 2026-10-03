@@ -600,6 +600,7 @@ app.get('/api/students/profiles', async (req, res) => {
            FROM public.t_deudas_insumos d 
            WHERE d.id_usuarios = ca.id_usuarios 
              AND d.tipo = 'ARCILLA' 
+             AND d.descripcion = 'Entrega de Arcilla 1kg'
              AND d.fec_carga >= DATE_TRUNC('month', CURRENT_DATE)
           ), 
           0
@@ -608,6 +609,7 @@ app.get('/api/students/profiles', async (req, res) => {
          FROM public.t_deudas_insumos d 
          WHERE d.id_usuarios = ca.id_usuarios 
            AND d.tipo = 'ARCILLA'
+           AND d.descripcion = 'Entrega de Arcilla 1kg'
         ) AS last_clay_delivery_date
       FROM public.t_cuenta_alumno ca
     `;
@@ -646,6 +648,7 @@ app.put('/api/students/profiles/:id', async (req, res) => {
            FROM public.t_deudas_insumos d 
            WHERE d.id_usuarios = ca.id_usuarios 
              AND d.tipo = 'ARCILLA' 
+             AND d.descripcion = 'Entrega de Arcilla 1kg'
              AND d.fec_carga >= DATE_TRUNC('month', CURRENT_DATE)
           ), 
           0
@@ -654,6 +657,7 @@ app.put('/api/students/profiles/:id', async (req, res) => {
          FROM public.t_deudas_insumos d 
          WHERE d.id_usuarios = ca.id_usuarios 
            AND d.tipo = 'ARCILLA'
+           AND d.descripcion = 'Entrega de Arcilla 1kg'
         ) AS last_clay_delivery_date
       FROM public.t_cuenta_alumno ca
       WHERE ca.id_usuarios = $1
@@ -1748,7 +1752,7 @@ app.post('/api/clay-deliveries', async (req, res) => {
     // Validar límite estricto de 1kg al mes (contamos registros en este mes)
     const clayCountRes = await db.query(
       `SELECT COUNT(*) FROM public.t_deudas_insumos 
-       WHERE id_usuarios = $1 AND tipo = 'ARCILLA' AND fec_carga >= DATE_TRUNC('month', CURRENT_DATE)`,
+       WHERE id_usuarios = $1 AND tipo = 'ARCILLA' AND descripcion = 'Entrega de Arcilla 1kg' AND fec_carga >= DATE_TRUNC('month', CURRENT_DATE)`,
       [studentId]
     );
     const count = parseInt(clayCountRes.rows[0].count);
@@ -1764,12 +1768,8 @@ app.post('/api/clay-deliveries', async (req, res) => {
       return res.status(400).json({ error: 'Límite mensual de arcilla alcanzado (1kg por mes). No se puede entregar más arcilla.' });
     }
 
-    // Fetch precio from config
-    const extraRes = await db.query("SELECT precio FROM public.t_config_extras WHERE tipo = 'ARCILLA' AND activo = true LIMIT 1");
+    // La primera arcilla del mes entregada por el profe es GRATIS ($0)
     let precio = 0;
-    if (extraRes.rows.length > 0) {
-      precio = parseFloat(extraRes.rows[0].precio);
-    }
 
     // Registrar en t_deudas_insumos como entrega de arcilla mensual
     await db.query(
