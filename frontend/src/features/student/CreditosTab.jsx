@@ -157,12 +157,22 @@ export default function CreditosTab({
 
             <div style={{ backgroundColor: 'var(--blanco)', border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.02)', padding: '20px', borderRadius: '24px', textAlign: 'center' }}>
               <p style={{ fontSize: '14px', marginBottom: '12px' }}><strong>Datos bancarios:</strong></p>
-              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-                CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
-              </p>
-              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-                Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
-              </p>
+              {currentUser?.sucursal?.toLowerCase() === 'alto verde' ? (
+                <>
+                  <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
+                  </p>
+                  <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI.2</code>
+                  </p>
+                </>
+              )}
               <p style={{ fontSize: '13px', margin: 0 }}>Titular: maria candelaria luna ottonello</p>
             </div>
 
@@ -208,12 +218,22 @@ export default function CreditosTab({
 
         <div style={{ backgroundColor: 'var(--blanco)', border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.02)', padding: '20px', borderRadius: '24px', textAlign: 'center' }}>
           <p style={{ fontSize: '14px', marginBottom: '12px' }}><strong>Datos bancarios:</strong></p>
-          <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-            CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
-          </p>
-          <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-            Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
-          </p>
+          {currentUser?.sucursal?.toLowerCase() === 'alto verde' ? (
+            <>
+              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
+              </p>
+              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI.2</code>
+              </p>
+            </>
+          )}
           <p style={{ fontSize: '13px', margin: 0 }}>Titular: maria candelaria luna ottonello</p>
         </div>
 
