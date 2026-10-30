@@ -319,7 +319,7 @@ export const AppProvider = ({ children }) => {
     ));
 
     try {
-      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED' });
+      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', isTeacher: true });
       // Re-fetch silencioso en background
       Promise.all([
         mockService.getBookings().then(setBookings),
@@ -350,14 +350,8 @@ export const AppProvider = ({ children }) => {
     if (!classData) throw new Error("No se encontró la clase seleccionada. Intentá de nuevo.");
     if (classData.pausedDates && classData.pausedDates.includes(dateStr)) throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
     if (profile.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
-    if (profile.classCredits <= 0) {
-      if (isGracePeriod && profile.classCredits === 0) {
-        // Permitido 1 clase a cuenta del 1 al 10
-      } else if (isGracePeriod && profile.classCredits < 0) {
-        throw new Error("La alumna ya utilizó su clase a cuenta del período del 1 al 10. Debe adquirir un pack mensual.");
-      } else {
-        throw new Error("La alumna no tiene créditos de clase disponibles.");
-      }
+    if (profile.classCredits < 0) {
+      throw new Error("La alumna ya utilizó su clase a cuenta y posee saldo negativo (-1). Debe adquirir un pack mensual.");
     }
 
     // Validar sucursal asignada
@@ -368,13 +362,7 @@ export const AppProvider = ({ children }) => {
       }
     }
 
-    // Validar límite de inscripción hasta 5 minutos antes
-    const startTimeStr = (classData.time || '00:00').split(' - ')[0];
-    const [h, m] = startTimeStr.split(':').map(Number);
-    const classStartTime = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`);
-    if (classStartTime.getTime() - Date.now() < 300000) {
-      throw new Error("Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.");
-    }
+    // No se valida límite de 5 minutos porque es agregación presencial de asistencia por el docente
 
     const existingBooking = bookings.find(
       b => b.studentId === studentId && b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
@@ -392,7 +380,7 @@ export const AppProvider = ({ children }) => {
     ));
 
     try {
-      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED' });
+      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', isTeacher: true });
       mockService.createAlert({ type: 'INFO', message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`, studentId });
       Promise.all([
         mockService.getBookings().then(setBookings),
