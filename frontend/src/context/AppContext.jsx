@@ -380,6 +380,14 @@ export const AppProvider = ({ children }) => {
     const newStatus = forceLate ? 'CANCELLED_LATE' : 'CANCELLED';
     setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
 
+    // Si es cancelación a tiempo o reintegro forzado, sumar el crédito en la UI optimista
+    const targetBooking = bookings.find(b => b.id === bookingId);
+    if (targetBooking && (!forceLate || forceRefund)) {
+      setStudentProfiles(prev => prev.map(p =>
+        p.studentId === targetBooking.studentId ? { ...p, classCredits: p.classCredits + 1 } : p
+      ));
+    }
+
     try {
       const response = await mockService.updateBooking(bookingId, {
         status: forceLate ? 'CANCELLED_LATE' : forceRefund ? 'CANCELLED_REFUND' : 'CANCELLED'

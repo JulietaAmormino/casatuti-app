@@ -162,19 +162,21 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
 
   const handleCancel = async (bookingId) => {
     const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
     const classData = classes.find(c => c.id === booking.classId);
-    const [h, m] = (classData.time.split(' - ')[0]).split(':').map(Number);
-    const classStart = new Date(booking.date + 'T00:00:00');
-    classStart.setHours(h, m, 0, 0);
-    const diffHours = (classStart - new Date()) / 3600000;
+    const startTimeStr = (classData?.time || '00:00').split(' - ')[0];
+    const [h, m] = startTimeStr.split(':').map(Number);
+    const dateStr = String(booking.date).split('T')[0];
+    const classStart = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`);
+    const diffHours = (classStart.getTime() - new Date().getTime()) / 3600000;
     const isLate = diffHours < 2;
     const msg = isLate
       ? '⚠️ Faltan menos de 2 horas. Perderás el crédito. ¿Continuar?'
-      : '¿Cancelar esta reserva?';
+      : '¿Cancelar esta reserva? Se reintegrará tu crédito.';
     if (!window.confirm(msg)) return;
     try {
       const res = await cancelBooking(bookingId, isLate);
-      alert(res.isLateCancellation ? 'Cancelación tardía. Crédito debitado.' : 'Reserva cancelada. Crédito reintegrado.');
+      alert(res.isLateCancellation ? 'Cancelación tardía. Crédito debitado.' : '¡Reserva cancelada con éxito! Se reintegró 1 crédito.');
     } catch (err) {
       alert(err.message);
     }
