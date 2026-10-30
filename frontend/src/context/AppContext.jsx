@@ -278,12 +278,24 @@ export const AppProvider = ({ children }) => {
     if (profile.isBlocked) {
       throw new Error("Tu cuenta está pausada. No puedes realizar nuevas reservas.");
     }
+    const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      day: 'numeric'
+    }).format(new Date()), 10);
+    const isGracePeriod = currentDay >= 1 && currentDay <= 10;
+
     if (profile.classCredits <= 0) {
-      mockService.createAlert({
-        type: 'NO_CREDITS',
-        message: `El alumno ${studentName} intentó reservar "${classData.name}" (${classData.day} - ${classData.time}) pero no tiene créditos de clase.`
-      }).then(() => mockService.getAlerts().then(setAlerts));
-      throw new Error("No tienes créditos de clase disponibles. Contacta al administrador.");
+      if (isGracePeriod && profile.classCredits === 0) {
+        // Permitido 1 clase a cuenta del 1 al 10 (su saldo pasará a -1)
+      } else if (isGracePeriod && profile.classCredits < 0) {
+        throw new Error("Ya utilizaste tu clase a cuenta del período del 1 al 10. Adquiere tu pack mensual para seguir reservando.");
+      } else {
+        mockService.createAlert({
+          type: 'NO_CREDITS',
+          message: `El alumno ${studentName} intentó reservar "${classData.name}" (${classData.day} - ${classData.time}) pero no tiene créditos de clase.`
+        }).then(() => mockService.getAlerts().then(setAlerts));
+        throw new Error("No tienes créditos de clase disponibles. Contacta al administrador.");
+      }
     }
     const existingBooking = bookings.find(
       b => b.studentId === studentId && b.classId === classId && b.date === dateStr && b.status !== 'CANCELLED'
@@ -338,7 +350,15 @@ export const AppProvider = ({ children }) => {
     if (!classData) throw new Error("No se encontró la clase seleccionada. Intentá de nuevo.");
     if (classData.pausedDates && classData.pausedDates.includes(dateStr)) throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
     if (profile.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
-    if (profile.classCredits <= 0) throw new Error("La alumna no tiene créditos de clase disponibles.");
+    if (profile.classCredits <= 0) {
+      if (isGracePeriod && profile.classCredits === 0) {
+        // Permitido 1 clase a cuenta del 1 al 10
+      } else if (isGracePeriod && profile.classCredits < 0) {
+        throw new Error("La alumna ya utilizó su clase a cuenta del período del 1 al 10. Debe adquirir un pack mensual.");
+      } else {
+        throw new Error("La alumna no tiene créditos de clase disponibles.");
+      }
+    }
 
     // Validar sucursal asignada
     if (student.role === 'ALUMNO' && classData.sucursal && student.sucursal) {

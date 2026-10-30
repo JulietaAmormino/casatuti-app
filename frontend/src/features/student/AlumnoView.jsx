@@ -166,6 +166,32 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
         return;
       }
     }
+
+    // Validación período del 1 al 10 para clase a cuenta
+    const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      day: 'numeric'
+    }).format(new Date()), 10);
+    const isGracePeriod = currentDay >= 1 && currentDay <= 10;
+    const currentCredits = profile?.classCredits ?? 0;
+
+    if (currentCredits <= 0) {
+      if (isGracePeriod && currentCredits === 0) {
+        const confirmOverdraft = window.confirm(
+          'No tienes créditos disponibles, pero del 1 al 10 de cada mes puedes reservar 1 clase a cuenta.\n\n' +
+          'Tu saldo quedará en -1 y esta clase se descontará automáticamente del total cuando compres tu pack mensual.\n\n' +
+          '¿Deseas confirmar la reserva?'
+        );
+        if (!confirmOverdraft) return;
+      } else if (isGracePeriod && currentCredits < 0) {
+        setBookingError('Ya utilizaste tu clase a cuenta del período del 1 al 10. Para continuar reservando debes adquirir tu pack mensual.');
+        return;
+      } else {
+        setBookingError('No tienes créditos disponibles. Adquiere tu pack mensual para reservar.');
+        return;
+      }
+    }
+
     try {
       await bookClass(classId, selectedDate);
       setSuccessMessage('¡Reserva confirmada con éxito!');
