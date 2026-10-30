@@ -319,7 +319,7 @@ export const AppProvider = ({ children }) => {
     ));
 
     try {
-      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', isTeacher: true });
+      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED' });
       // Re-fetch silencioso en background
       Promise.all([
         mockService.getBookings().then(setBookings),
