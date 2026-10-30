@@ -1430,16 +1430,32 @@ app.post('/api/bookings', async (req, res) => {
       return res.status(400).json({ error: 'Tu cuenta está pausada. No puedes realizar nuevas reservas.' });
     }
 
-    // 3. Validar si el estudiante posee créditos
-    if (profile.saldo_actual <= 0) {
-      // Crear alerta en BD
-      const alertMsg = `El alumno ${studentName} intentó reservar "${className}" (${classDay} - ${classTime}) pero no tiene créditos de clase.`;
-      await db.query(
-        'INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, false, NOW())',
-        ['Sin Créditos', alertMsg, 'NO_CREDITS']
-      );
+    // 3. Validar si el estudiante posee créditos o regla de clase a cuenta del 1 al 10
+    const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      day: 'numeric'
+    }).format(new Date()), 10);
+    const isGracePeriod = currentDay >= 1 && currentDay <= 10;
 
-      return res.status(400).json({ error: 'No tienes créditos de clase disponibles. Contacta al administrador.' });
+    if (profile.saldo_actual <= 0) {
+      if (isGracePeriod && profile.saldo_actual === 0) {
+        // Permitido: Clase a cuenta del 1 al 10 (su saldo pasará a -1 al debitarse)
+      } else {
+        if (isGracePeriod && profile.saldo_actual < 0) {
+          return res.status(400).json({
+            error: 'Ya utilizaste tu clase a cuenta del período del 1 al 10. Para continuar reservando debes adquirir tu pack mensual.'
+          });
+        }
+
+        // Crear alerta en BD si no tiene créditos
+        const alertMsg = `El alumno ${studentName} intentó reservar "${className}" (${classDay} - ${classTime}) pero no tiene créditos de clase.`;
+        await db.query(
+          'INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, false, NOW())',
+          ['Sin Créditos', alertMsg, 'NO_CREDITS']
+        );
+
+        return res.status(400).json({ error: 'No tienes créditos de clase disponibles. Adquiere tu pack mensual para reservar.' });
+      }
     }
 
     // 3. Obtener o crear la instancia de la clase para esa fecha

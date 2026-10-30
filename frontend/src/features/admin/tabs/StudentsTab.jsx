@@ -44,7 +44,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
     const matchesStatus = selectedStatus === 'ALL' ||
       (selectedStatus === 'ACTIVE' && !profile.isBlocked) ||
       (selectedStatus === 'INACTIVE' && profile.isBlocked);
-    const matchesCredits = !filterZeroCredits || profile.classCredits === 0;
+    const matchesCredits = !filterZeroCredits || profile.classCredits <= 0;
     const matchesActive = !filterActivePacks || profile.classCredits >= 1;
     return matchesSearch && matchesBranch && matchesStatus && matchesCredits && matchesActive;
   });
@@ -266,7 +266,7 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: filterZeroCredits ? 'var(--marron-arcilla)' : 'var(--gris-claro)' }}></div>
                 Sin clases ({students.filter(st => {
                   const p = studentProfiles.find(x => x.studentId === st.id) || { classCredits: 0 };
-                  return p.classCredits === 0;
+                  return p.classCredits <= 0;
                 }).length})
               </button>
 
@@ -541,13 +541,18 @@ export default function StudentsTab({ showFeedback, onEdit, initialFilter, onCle
                             </span>
                             <div style={{
                               display: 'flex', alignItems: 'center', gap: '6px',
-                              backgroundColor: profile.classCredits === 0 ? '#FCF9F7' : '#D1D7CD',
-                              border: profile.classCredits === 0 ? '1px solid #F1E5DF' : 'none',
+                              backgroundColor: profile.classCredits < 0 ? '#FFF7ED' : (profile.classCredits === 0 ? '#FCF9F7' : '#D1D7CD'),
+                              border: profile.classCredits < 0 ? '1px solid #FFE5CC' : (profile.classCredits === 0 ? '1px solid #F1E5DF' : 'none'),
                               padding: '4px 10px', borderRadius: '14px'
                             }}>
                               {profile.classCredits === 0 && <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--marron-arcilla)' }}></div>}
-                              <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--gris-oscuro)' }}>
-                                {profile.classCredits} disp.
+                              {profile.classCredits < 0 && <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#CC7A42' }}></div>}
+                              <span style={{
+                                fontSize: '13px',
+                                fontWeight: '800',
+                                color: profile.classCredits < 0 ? '#CC7A42' : 'var(--gris-oscuro)'
+                              }}>
+                                {profile.classCredits < 0 ? `${profile.classCredits} (a cuenta)` : `${profile.classCredits} disp.`}
                               </span>
                             </div>
                           </div>
