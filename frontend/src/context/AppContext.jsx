@@ -686,6 +686,9 @@ export const AppProvider = ({ children }) => {
 
     try {
       const updatedUser = await mockService.updateUser(userId, userData);
+      if (currentUser && currentUser.id === userId && updatedUser?.sucursal) {
+        setCurrentUser(prev => ({ ...prev, ...updatedUser }));
+      }
       Promise.all([
         mockService.getUsers().then(setUsers),
         mockService.getStudentProfiles().then(setStudentProfiles),
