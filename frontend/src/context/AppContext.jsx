@@ -339,6 +339,23 @@ export const AppProvider = ({ children }) => {
     if (classData.pausedDates && classData.pausedDates.includes(dateStr)) throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
     if (profile.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
     if (profile.classCredits <= 0) throw new Error("La alumna no tiene créditos de clase disponibles.");
+
+    // Validar sucursal asignada
+    if (student.role === 'ALUMNO' && classData.sucursal && student.sucursal) {
+      const userBranches = student.sucursal.split(',').map(s => s.trim().toUpperCase());
+      if (!userBranches.includes(classData.sucursal.toUpperCase())) {
+        throw new Error(`Solo puedes reservar turnos correspondientes a tu sucursal (${student.sucursal}).`);
+      }
+    }
+
+    // Validar límite de inscripción hasta 5 minutos antes
+    const startTimeStr = (classData.time || '00:00').split(' - ')[0];
+    const [h, m] = startTimeStr.split(':').map(Number);
+    const classStartTime = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`);
+    if (classStartTime.getTime() - Date.now() < 300000) {
+      throw new Error("Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.");
+    }
+
     const existingBooking = bookings.find(
       b => b.studentId === studentId && b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
     );

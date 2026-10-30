@@ -1308,6 +1308,36 @@ app.post('/api/waitlist', async (req, res) => {
   }
 
   try {
+    const classRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [classId]);
+    if (classRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Clase no válida.' });
+    }
+    const classData = classRes.rows[0];
+
+    // Validar sucursal del estudiante
+    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado.' });
+    }
+    const studentUser = userRes.rows[0];
+    if (studentUser.rol === 'ALUMNO' && classData.id_sucursal) {
+      const studentBranches = studentUser.id_sucursales || [];
+      if (!studentBranches.includes(classData.id_sucursal)) {
+        return res.status(400).json({ error: 'Solo puedes unirte a la lista de espera en turnos correspondientes a tu sucursal.' });
+      }
+    }
+
+    // Validar anticipación de 5 minutos
+    const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
+    const [hours, minutes] = startTimeStr.split(':').map(Number);
+    const dateStr = String(date).split('T')[0];
+    const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
+    const diffMs = classStartDateTime.getTime() - new Date().getTime();
+
+    if (diffMs < 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'Solo puedes unirte a la lista de espera hasta 5 minutos antes del inicio de la clase.' });
+    }
+
     // 1. Obtener o crear la instancia de la clase para esa fecha
     let instanceId;
     const instanceRes = await db.query(
@@ -1370,6 +1400,30 @@ app.post('/api/bookings', async (req, res) => {
     const className = "Clase";
     const classDay = classData.dia_semana;
     const classTime = `${classData.hora_inicio} - ${classData.hora_fin}`;
+
+    // Validar sucursal del estudiante
+    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado.' });
+    }
+    const studentUser = userRes.rows[0];
+    if (studentUser.rol === 'ALUMNO' && classData.id_sucursal) {
+      const studentBranches = studentUser.id_sucursales || [];
+      if (!studentBranches.includes(classData.id_sucursal)) {
+        return res.status(400).json({ error: 'Solo puedes inscribirte en clases de tu sucursal asignada.' });
+      }
+    }
+
+    // Validar anticipación de 5 minutos (con huso horario de Argentina -03:00)
+    const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
+    const [hours, minutes] = startTimeStr.split(':').map(Number);
+    const dateStr = String(date).split('T')[0];
+    const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
+    const diffMs = classStartDateTime.getTime() - new Date().getTime();
+
+    if (diffMs < 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.' });
+    }
 
     // 2. Validar si la cuenta está bloqueada/pausada
     if (profile.bl_bloqueado) {
@@ -1681,14 +1735,40 @@ app.post('/api/bookings/:id/reschedule', async (req, res) => {
       newInstanceId = result.rows[0].id_clase_instancia;
     }
 
-    // Validar cupos en nueva clase
+    // Validar cupos y sucursal en nueva clase
+    const newClassDefRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [newClassId]);
+    if (newClassDefRes.rows.length === 0) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'El nuevo turno seleccionado no es válido.' });
+    }
+    const newClassDef = newClassDefRes.rows[0];
+
+    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [oldBooking.id_usuarios]);
+    const studentUser = userRes.rows[0];
+    if (studentUser?.rol === 'ALUMNO' && newClassDef.id_sucursal) {
+      const studentBranches = studentUser.id_sucursales || [];
+      if (!studentBranches.includes(newClassDef.id_sucursal)) {
+        await db.query('ROLLBACK');
+        return res.status(400).json({ error: 'Solo puedes reprogramar hacia turnos de tu sucursal asignada.' });
+      }
+    }
+
+    // Validar anticipación de 5 minutos en el nuevo turno
+    const newStartTimeStr = newClassDef.hora_inicio.toString().split(' ')[0];
+    const [newHours, newMinutes] = newStartTimeStr.split(':').map(Number);
+    const newDateStrClean = String(newDate).split('T')[0];
+    const newClassStart = new Date(`${newDateStrClean}T${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}:00-03:00`);
+    if (newClassStart.getTime() - new Date().getTime() < 5 * 60 * 1000) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo puedes reprogramar hacia turnos que inicien dentro de al menos 5 minutos.' });
+    }
+
     const countRes = await db.query(
       "SELECT COUNT(*) FROM public.t_inscripciones WHERE id_clase_instancia = $1 AND estado != 'CANCELADA'",
       [newInstanceId]
     );
     const activeBookingsCount = parseInt(countRes.rows[0].count);
-    const newClassDefRes = await db.query('SELECT cupo_maximo FROM public.t_clases_def WHERE id_clases_def = $1', [newClassId]);
-    if (activeBookingsCount >= newClassDefRes.rows[0].cupo_maximo) {
+    if (activeBookingsCount >= newClassDef.cupo_maximo) {
       await db.query('ROLLBACK');
       return res.status(400).json({ error: 'La nueva clase no tiene cupos disponibles.' });
     }
