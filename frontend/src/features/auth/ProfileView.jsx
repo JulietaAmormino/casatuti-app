@@ -27,7 +27,8 @@ export default function ProfileView() {
     email: currentUser?.email || '',
     telefono: currentUser?.telefono || '',
     instagram: currentUser?.instagram || '',
-    avatar_url: currentUser?.avatar_url || ''
+    avatar_url: currentUser?.avatar_url || '',
+    sucursal: currentUser?.sucursal || ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -55,7 +56,10 @@ export default function ProfileView() {
     setLoading(true);
     setMessage(null);
     try {
-      await updateUserAction(currentUser.id, formData);
+      await updateUserAction(currentUser.id, {
+        ...formData,
+        sucursal: currentUser?.sucursal || formData.sucursal
+      });
       setMessage({ type: 'success', text: '¡Datos actualizados con éxito!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {

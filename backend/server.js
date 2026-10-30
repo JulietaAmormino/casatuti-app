@@ -704,7 +704,14 @@ app.put('/api/users/:id', async (req, res) => {
         instagram = $6,
         fecha_nacimiento = $7,
         avatar_url = $8,
-        id_sucursales = (SELECT array_agg(s.id_sucursal) FROM public.t_sucursales s WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($9, ',')))))),
+        id_sucursales = CASE 
+          WHEN $9::text IS NOT NULL THEN (
+            SELECT array_agg(s.id_sucursal) 
+            FROM public.t_sucursales s 
+            WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($9, ',')))))
+          )
+          ELSE id_sucursales 
+        END,
         genero = $10
       WHERE id_usuarios = $11
       RETURNING *
@@ -721,7 +728,7 @@ app.put('/api/users/:id', async (req, res) => {
       instagram || null,
       fecha_nacimiento || null,
       avatar_url || null,
-      sucursal || 'CENTRO',
+      sucursal !== undefined && sucursal !== null ? sucursal : null,
       genero || null,
       id
     ]);
@@ -732,6 +739,14 @@ app.put('/api/users/:id', async (req, res) => {
     }
 
     const updatedUser = userRes.rows[0];
+
+    const { rows: branchRows } = await db.query(
+      `SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') AS sucursal 
+       FROM unnest($1::integer[]) sid 
+       LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid`,
+      [updatedUser.id_sucursales || []]
+    );
+    updatedUser.sucursal = branchRows[0]?.sucursal || 'CENTRO';
 
     if (updatedUser.rol === 'ALUMNO' && sucursal) {
       const branchRes = await db.query(
