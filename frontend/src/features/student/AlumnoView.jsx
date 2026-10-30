@@ -77,6 +77,8 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
     a => a.studentId === currentUser.id && !a.resolved
   );
 
+  const studentBranch = currentUser.sucursal ? currentUser.sucursal.toUpperCase() : null;
+
   const weekDays = useMemo(() => {
     return DAYS_OF_WEEK.map(day => {
       const date = getWeekDate(day);
@@ -85,11 +87,12 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
       if (date) {
         hasTurns = classes.some(c => {
           if (c.day !== day) return false;
+          if (studentBranch && (c.sucursal || '').toUpperCase() !== studentBranch) return false;
+
           const startTimeStr = (c.time || '00:00').split(' - ')[0];
           const [hours, minutes] = startTimeStr.split(':').map(Number);
           
-          const classStartTime = new Date(`${date}T00:00:00`);
-          classStartTime.setHours(hours, minutes, 0, 0);
+          const classStartTime = new Date(`${date}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
 
           const now = new Date();
           const diffMs = classStartTime.getTime() - now.getTime();
@@ -99,7 +102,7 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
 
       return { day, date, available: !!date, hasTurns };
     }).filter(d => d.hasTurns);
-  }, [classes]);
+  }, [classes, studentBranch]);
 
   useEffect(() => {
     if (weekDays.length > 0 && !weekDays.find(w => w.day === selectedDay)) {
@@ -109,16 +112,15 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
 
   const selectedDate = getWeekDate(selectedDay);
 
-  const studentBranch = currentUser.sucursal ? currentUser.sucursal.toUpperCase() : null;
   const classesForDay = classes.filter(c => {
     if (c.day !== selectedDay) return false;
     if (!selectedDate) return false;
+    if (studentBranch && (c.sucursal || '').toUpperCase() !== studentBranch) return false;
 
     const startTimeStr = (c.time || '00:00').split(' - ')[0];
     const [hours, minutes] = startTimeStr.split(':').map(Number);
     
-    const classStartTime = new Date(`${selectedDate}T00:00:00`);
-    classStartTime.setHours(hours, minutes, 0, 0);
+    const classStartTime = new Date(`${selectedDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
 
     const now = new Date();
     const diffMs = classStartTime.getTime() - now.getTime();
@@ -149,6 +151,20 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
     if (!selectedDate) {
       setBookingError('Este día ya pasó esta semana.');
       return;
+    }
+    const targetClass = classes.find(c => c.id === classId);
+    if (targetClass) {
+      if (studentBranch && (targetClass.sucursal || '').toUpperCase() !== studentBranch) {
+        setBookingError(`Solo puedes anotarte en clases de tu sucursal (${currentUser.sucursal}).`);
+        return;
+      }
+      const startTimeStr = (targetClass.time || '00:00').split(' - ')[0];
+      const [h, m] = startTimeStr.split(':').map(Number);
+      const classStart = new Date(`${selectedDate}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`);
+      if (classStart.getTime() - Date.now() < 300000) {
+        setBookingError('Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.');
+        return;
+      }
     }
     try {
       await bookClass(classId, selectedDate);
