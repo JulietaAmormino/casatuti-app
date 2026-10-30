@@ -8,10 +8,10 @@ export default function AlumnosTabProfe({ currentUser, users, classes, bookings,
   // Y filtrarlos por la sucursal seleccionada (o las sucursales del profe si es "ALL")
   const baseStudents = users.filter(u => {
     if (u.role !== 'ALUMNO') return false;
-    
+
     // Normalizar sucursal del usuario a mayúsculas
     const userBranches = (u.sucursal || 'CENTRO').toUpperCase();
-    
+
     if (selectedBranch === 'ALL') {
       if (myBranches && myBranches.length > 0) {
         // Verificar si alguna de las sucursales del usuario coincide con las del profe
@@ -35,22 +35,22 @@ export default function AlumnosTabProfe({ currentUser, users, classes, bookings,
   });
 
   // 3. Filtrar por búsqueda
-  const filteredStudents = myStudents.filter(s => 
+  const filteredStudents = myStudents.filter(s =>
     s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="animate-slide-up">
       <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)', marginBottom: '16px' }}>
-        Directorio de Alumnos/as <span style={{ fontSize: '10px', color: 'gray' }}>(v2)</span>
+        Directorio de Alumnos/as <span style={{ fontSize: '10px', color: 'gray' }}></span>
       </h3>
 
       {/* Buscador */}
       <div className="form-group" style={{ position: 'relative', marginBottom: '20px' }}>
-        <input 
-          type="text" 
-          className="input-tuti" 
-          placeholder="Buscar alumno/a por nombre..." 
+        <input
+          type="text"
+          className="input-tuti"
+          placeholder="Buscar alumno/a por nombre..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ paddingLeft: '40px' }}
