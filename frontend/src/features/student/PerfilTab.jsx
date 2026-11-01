@@ -28,6 +28,7 @@ export default function PerfilTab() {
     telefono: currentUser?.telefono || '',
     instagram: currentUser?.instagram || '',
     avatar_url: currentUser?.avatar_url || '',
+    sucursal: currentUser?.sucursal || '',
   });
 
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' });
@@ -58,7 +59,11 @@ export default function PerfilTab() {
 
         // Auto-guardar para que se refleje inmediatamente en el avatar superior
         try {
-          await updateUserAction(currentUser.id, { ...formData, avatar_url: base64Url });
+          await updateUserAction(currentUser.id, { 
+            ...formData, 
+            sucursal: currentUser?.sucursal || formData.sucursal,
+            avatar_url: base64Url 
+          });
           setMessage({ type: 'success', text: '¡Foto de perfil actualizada!' });
           setTimeout(() => setMessage(null), 3000);
         } catch (err) {
@@ -74,7 +79,10 @@ export default function PerfilTab() {
     setLoading(true);
     setMessage(null);
     try {
-      await updateUserAction(currentUser.id, formData);
+      await updateUserAction(currentUser.id, {
+        ...formData,
+        sucursal: currentUser?.sucursal || formData.sucursal
+      });
       setMessage({ type: 'success', text: '¡Datos actualizados con éxito!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {

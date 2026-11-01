@@ -100,6 +100,20 @@ export default function CreditosTab({
       <div>
         {buyStep === 1 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {classCredits < 0 && (
+              <div style={{
+                backgroundColor: '#FFF7ED',
+                border: '1px solid #FFE5CC',
+                borderRadius: '16px',
+                padding: '12px 16px',
+                fontSize: '12px',
+                color: '#CC7A42',
+                fontWeight: 600,
+                lineHeight: 1.4
+              }}>
+                ℹ️ Tenés 1 clase a cuenta reservada. Al acreditarse tu pack, se descontará automáticamente esa clase del total.
+              </div>
+            )}
             <p style={{ fontSize: '13px', color: 'var(--gris-medio)', margin: 0 }}>Elegí tu pack de clases:</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -157,12 +171,22 @@ export default function CreditosTab({
 
             <div style={{ backgroundColor: 'var(--blanco)', border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.02)', padding: '20px', borderRadius: '24px', textAlign: 'center' }}>
               <p style={{ fontSize: '14px', marginBottom: '12px' }}><strong>Datos bancarios:</strong></p>
-              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-                CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
-              </p>
-              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-                Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
-              </p>
+              {currentUser?.sucursal?.toLowerCase().includes('alto verde') ? (
+                <>
+                  <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
+                  </p>
+                  <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI.2</code>
+                  </p>
+                </>
+              )}
               <p style={{ fontSize: '13px', margin: 0 }}>Titular: maria candelaria luna ottonello</p>
             </div>
 
@@ -208,12 +232,22 @@ export default function CreditosTab({
 
         <div style={{ backgroundColor: 'var(--blanco)', border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.02)', padding: '20px', borderRadius: '24px', textAlign: 'center' }}>
           <p style={{ fontSize: '14px', marginBottom: '12px' }}><strong>Datos bancarios:</strong></p>
-          <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-            CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
-          </p>
-          <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-            Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
-          </p>
+          {currentUser?.sucursal?.toLowerCase().includes('alto verde') ? (
+            <>
+              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                CBU: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>000003100076164884013</code>
+              </p>
+              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI</code>
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                Alias: <code style={{ backgroundColor: '#f0f0f0', padding: '4px 8px', borderRadius: '8px', wordBreak: 'break-all' }}>CASA.TUTI.2</code>
+              </p>
+            </>
+          )}
           <p style={{ fontSize: '13px', margin: 0 }}>Titular: maria candelaria luna ottonello</p>
         </div>
 
@@ -367,6 +401,30 @@ export default function CreditosTab({
             Clases disponibles
           </h4>
         </div>
+
+        {classCredits < 0 && (
+          <div style={{
+            padding: '16px 20px',
+            borderRadius: '24px',
+            backgroundColor: '#FFF7ED',
+            border: '2px solid #FFE5CC',
+            boxShadow: '0 4px 16px rgba(204,122,66,0.06)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            marginBottom: '16px'
+          }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#CC7A42', textTransform: 'uppercase' }}>
+              Clase a cuenta (Período 1 al 10)
+            </span>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: 0 }}>
+              Tenés 1 clase a cuenta reservada (-1 crédito)
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--gris-medio)', margin: 0, lineHeight: 1.4 }}>
+              Esta clase se descontará automáticamente del total disponible cuando adquieras tu próximo pack mensual.
+            </p>
+          </div>
+        )}
 
         {activePacksList.length === 0 ? (
           <p style={{ fontSize: '14px', color: 'var(--gris-medio)' }}>No tenés packs de créditos activos actualmente.</p>

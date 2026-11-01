@@ -570,8 +570,11 @@ export default function TurnosTab({
                 const origClass = classes.find(orig => orig.id === bookingToReschedule?.classId);
                 const dateStr = weekDays.find(w => w.day === rescheduleSelectedDay)?.date;
                 const isAlreadyEnrolled = myBookings?.some(b => b.classId === c.id && b.date === dateStr && b.status === 'CONFIRMED');
-                const isSameSlot = bookingToReschedule?.classId === c.id && bookingToReschedule?.date === dateStr;
-                return c.day === rescheduleSelectedDay && origClass && c.sucursal === origClass.sucursal && !isAlreadyEnrolled && !isSameSlot;
+                const startTimeStr = (c.time || '00:00').split(' - ')[0];
+                const [h, m] = startTimeStr.split(':').map(Number);
+                const classStart = dateStr ? new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`) : null;
+                const isFutureEnough = classStart ? (classStart.getTime() - Date.now() >= 300000) : false;
+                return c.day === rescheduleSelectedDay && origClass && c.sucursal === origClass.sucursal && !isAlreadyEnrolled && !isSameSlot && isFutureEnough;
               }).map(c => {
                 const dateStr = weekDays.find(w => w.day === rescheduleSelectedDay)?.date;
                 const occ = getOccupancyInfo(c.id, dateStr);

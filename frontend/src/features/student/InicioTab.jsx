@@ -53,6 +53,12 @@ export default function InicioTab({
     myPendingPayments.reduce((sum, p) => sum + Number(p.amount), 0) +
     myPendingInsumos.reduce((sum, b) => sum + Number(b.price), 0);
 
+  const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    day: 'numeric'
+  }).format(new Date()), 10);
+  const isGracePeriod = currentDay >= 1 && currentDay <= 10;
+
   const [expandedBookingId, setExpandedBookingId] = useState(null);
   const [isNormasExpanded, setIsNormasExpanded] = useState(true);
 
@@ -76,12 +82,11 @@ export default function InicioTab({
           {/* Card Créditos (Izquierda - span 2 rows) */}
           <div
             onClick={() => {
-              if (profile.classCredits > 0 && onGoToTurnos) {
+              const canBook = (profile?.classCredits ?? 0) > 0 || (isGracePeriod && (profile?.classCredits ?? 0) === 0);
+              if (canBook && onGoToTurnos) {
                 onGoToTurnos();
-                setShowNoCreditsError(false);
-              } else {
-                setShowNoCreditsError(true);
-                setTimeout(() => setShowNoCreditsError(false), 5000);
+              } else if (onOpenBuyModal) {
+                onOpenBuyModal();
               }
             }}
             style={{
@@ -110,13 +115,37 @@ export default function InicioTab({
 
             {/* Main content */}
             <div style={{ marginTop: 'auto', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <span style={{ fontSize: '56px', fontWeight: 900, color: 'var(--gris-oscuro)', lineHeight: 1 }}>{profile.classCredits}</span>
-                <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>clases</span>
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gris-oscuro)', marginTop: '4px' }}>
-                Disponibles
-              </div>
+              {(profile?.classCredits ?? 0) < 0 ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontSize: '56px', fontWeight: 900, color: '#C0392B', lineHeight: 1 }}>{profile.classCredits}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#C0392B' }}>clase</span>
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#8A2518', marginTop: '4px', lineHeight: 1.2 }}>
+                    A cuenta (se resta al comprar pack)
+                  </div>
+                </>
+              ) : (profile?.classCredits ?? 0) === 0 && isGracePeriod ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontSize: '56px', fontWeight: 900, color: 'var(--gris-oscuro)', lineHeight: 1 }}>0</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>clases</span>
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#976916', marginTop: '4px', lineHeight: 1.2 }}>
+                    1 a cuenta disp. (1 al 10)
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontSize: '56px', fontWeight: 900, color: 'var(--gris-oscuro)', lineHeight: 1 }}>{profile?.classCredits ?? 0}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>clases</span>
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gris-oscuro)', marginTop: '4px' }}>
+                    Disponibles
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Bottom link */}

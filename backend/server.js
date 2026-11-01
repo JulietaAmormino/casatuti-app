@@ -452,9 +452,10 @@ app.post('/api/users', async (req, res) => {
 
     // 2. Si el rol es ALUMNO, crear su perfil correspondiente en t_cuenta_alumno
     if (role === 'ALUMNO') {
+      const defaultBranchId = createdUser.id_sucursales?.[0] || 1;
       await db.query(
-        'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo) VALUES ($1, $2, 4)',
-        [createdUser.id_usuarios, 0]
+        'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, $2, 4, $3)',
+        [createdUser.id_usuarios, 0, defaultBranchId]
       );
 
       // Enviar mail de bienvenida con normas de convivencia (FAQs)
@@ -548,7 +549,8 @@ app.put('/api/users/:id/role', async (req, res) => {
     if (role === 'ALUMNO') {
       const accountCheck = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [id]);
       if (accountCheck.rows.length === 0) {
-        await db.query('INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo) VALUES ($1, 0, 4)', [id]);
+        const uBranch = rows[0]?.id_sucursales?.[0] || 1;
+        await db.query('INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, 0, 4, $2)', [id, uBranch]);
       }
     }
 
@@ -704,7 +706,14 @@ app.put('/api/users/:id', async (req, res) => {
         instagram = $6,
         fecha_nacimiento = $7,
         avatar_url = $8,
-        id_sucursales = (SELECT array_agg(s.id_sucursal) FROM public.t_sucursales s WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($9, ',')))))),
+        id_sucursales = CASE 
+          WHEN $9::text IS NOT NULL THEN (
+            SELECT array_agg(s.id_sucursal) 
+            FROM public.t_sucursales s 
+            WHERE UPPER(s.n_sucursal) = ANY(SELECT UPPER(trim(unnest(string_to_array($9, ',')))))
+          )
+          ELSE id_sucursales 
+        END,
         genero = $10
       WHERE id_usuarios = $11
       RETURNING *
@@ -721,7 +730,7 @@ app.put('/api/users/:id', async (req, res) => {
       instagram || null,
       fecha_nacimiento || null,
       avatar_url || null,
-      sucursal || 'CENTRO',
+      sucursal !== undefined && sucursal !== null ? sucursal : null,
       genero || null,
       id
     ]);
@@ -733,18 +742,20 @@ app.put('/api/users/:id', async (req, res) => {
 
     const updatedUser = userRes.rows[0];
 
-    if (updatedUser.rol === 'ALUMNO' && sucursal) {
-      const branchRes = await db.query(
-        "SELECT id_sucursal FROM public.t_sucursales WHERE LOWER(n_sucursal) = LOWER($1) LIMIT 1",
-        [sucursal]
+    const { rows: branchRows } = await db.query(
+      `SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') AS sucursal 
+       FROM unnest($1::integer[]) sid 
+       LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid`,
+      [updatedUser.id_sucursales || []]
+    );
+    updatedUser.sucursal = branchRows[0]?.sucursal || 'CENTRO';
+
+    if (updatedUser.rol === 'ALUMNO') {
+      const primaryBranchId = updatedUser.id_sucursales?.[0] || 1;
+      await db.query(
+        "UPDATE public.t_cuenta_alumno SET id_sucursal = $1 WHERE id_usuarios = $2",
+        [primaryBranchId, id]
       );
-      if (branchRes.rows.length > 0) {
-        const branchId = branchRes.rows[0].id_sucursal;
-        await db.query(
-          "UPDATE public.t_cuenta_alumno SET id_sucursal = $1 WHERE id_usuarios = $2",
-          [branchId, id]
-        );
-      }
     }
 
     await db.query('COMMIT');
@@ -1297,6 +1308,36 @@ app.post('/api/waitlist', async (req, res) => {
   }
 
   try {
+    const classRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [classId]);
+    if (classRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Clase no válida.' });
+    }
+    const classData = classRes.rows[0];
+
+    // Validar sucursal del estudiante
+    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado.' });
+    }
+    const studentUser = userRes.rows[0];
+    if (studentUser.rol === 'ALUMNO' && classData.id_sucursal) {
+      const studentBranches = studentUser.id_sucursales || [];
+      if (!studentBranches.includes(classData.id_sucursal)) {
+        return res.status(400).json({ error: 'Solo puedes unirte a la lista de espera en turnos correspondientes a tu sucursal.' });
+      }
+    }
+
+    // Validar anticipación de 5 minutos
+    const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
+    const [hours, minutes] = startTimeStr.split(':').map(Number);
+    const dateStr = String(date).split('T')[0];
+    const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
+    const diffMs = classStartDateTime.getTime() - new Date().getTime();
+
+    if (diffMs < 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'Solo puedes unirte a la lista de espera hasta 5 minutos antes del inicio de la clase.' });
+    }
+
     // 1. Obtener o crear la instancia de la clase para esa fecha
     let instanceId;
     const instanceRes = await db.query(
@@ -1360,21 +1401,61 @@ app.post('/api/bookings', async (req, res) => {
     const classDay = classData.dia_semana;
     const classTime = `${classData.hora_inicio} - ${classData.hora_fin}`;
 
+    // Validar sucursal del estudiante
+    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado.' });
+    }
+    const studentUser = userRes.rows[0];
+    if (studentUser.rol === 'ALUMNO' && classData.id_sucursal) {
+      const studentBranches = studentUser.id_sucursales || [];
+      if (!studentBranches.includes(classData.id_sucursal)) {
+        return res.status(400).json({ error: 'Solo puedes inscribirte en clases de tu sucursal asignada.' });
+      }
+    }
+
+    // Validar anticipación de 5 minutos (con huso horario de Argentina -03:00)
+    const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
+    const [hours, minutes] = startTimeStr.split(':').map(Number);
+    const dateStr = String(date).split('T')[0];
+    const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
+    const diffMs = classStartDateTime.getTime() - new Date().getTime();
+
+    if (diffMs < 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.' });
+    }
+
     // 2. Validar si la cuenta está bloqueada/pausada
     if (profile.bl_bloqueado) {
       return res.status(400).json({ error: 'Tu cuenta está pausada. No puedes realizar nuevas reservas.' });
     }
 
-    // 3. Validar si el estudiante posee créditos
-    if (profile.saldo_actual <= 0) {
-      // Crear alerta en BD
-      const alertMsg = `El alumno ${studentName} intentó reservar "${className}" (${classDay} - ${classTime}) pero no tiene créditos de clase.`;
-      await db.query(
-        'INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, false, NOW())',
-        ['Sin Créditos', alertMsg, 'NO_CREDITS']
-      );
+    // 3. Validar si el estudiante posee créditos o regla de clase a cuenta del 1 al 10
+    const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      day: 'numeric'
+    }).format(new Date()), 10);
+    const isGracePeriod = currentDay >= 1 && currentDay <= 10;
 
-      return res.status(400).json({ error: 'No tienes créditos de clase disponibles. Contacta al administrador.' });
+    if (profile.saldo_actual <= 0) {
+      if (isGracePeriod && profile.saldo_actual === 0) {
+        // Permitido: Clase a cuenta del 1 al 10 (su saldo pasará a -1 al debitarse)
+      } else {
+        if (isGracePeriod && profile.saldo_actual < 0) {
+          return res.status(400).json({
+            error: 'Ya utilizaste tu clase a cuenta del período del 1 al 10. Para continuar reservando debes adquirir tu pack mensual.'
+          });
+        }
+
+        // Crear alerta en BD si no tiene créditos
+        const alertMsg = `El alumno ${studentName} intentó reservar "${className}" (${classDay} - ${classTime}) pero no tiene créditos de clase.`;
+        await db.query(
+          'INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, false, NOW())',
+          ['Sin Créditos', alertMsg, 'NO_CREDITS']
+        );
+
+        return res.status(400).json({ error: 'No tienes créditos de clase disponibles. Adquiere tu pack mensual para reservar.' });
+      }
     }
 
     // 3. Obtener o crear la instancia de la clase para esa fecha
@@ -1492,7 +1573,7 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
         COALESCE(u.nombre || ' ' || u.apellido, 'Alumno') AS student_name,
         ci.id_clase_instancia AS id_clase_instancia,
         ci.id_clases_def AS class_id,
-        ci.fecha_efectiva AS date,
+        ci.fecha_efectiva::text AS date,
         i.estado AS status
       FROM public.t_inscripciones i
       JOIN public.t_usuarios u ON i.id_usuarios = u.id_usuarios
@@ -1505,6 +1586,10 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
     }
     const booking = bookingRes.rows[0];
 
+    if (booking.status === 'CANCELADA') {
+      return res.status(400).json({ error: 'La reserva ya se encuentra cancelada.' });
+    }
+
     // Obtener clase
     const classRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [booking.class_id]);
     if (classRes.rows.length === 0) {
@@ -1514,12 +1599,12 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
     const className = "Clase";
     const classTimeStr = `${classData.hora_inicio} - ${classData.hora_fin}`;
 
-    // 2. Lógica de cálculo de tiempo (2 horas antes del inicio)
+    // 2. Lógica de cálculo de tiempo (2 horas antes del inicio con timezone Argentina UTC-3)
     const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
     const [hours, minutes] = startTimeStr.split(':').map(Number);
 
-    const dateStr = booking.date instanceof Date ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
-    const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`);
+    const dateStr = String(booking.date).split('T')[0];
+    const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
 
     const now = new Date();
     const diffMs = classStartDateTime.getTime() - now.getTime();
@@ -1535,7 +1620,6 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
       );
 
       // Crear alerta en t_notificaciones
-      const dateStr = booking.date instanceof Date ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
       const alertMsg = `El alumno ${booking.student_name} realizó una cancelación tardía (menos de 2 horas) para "${className}" del ${dateStr} a las ${startTimeStr}. Se debitó el crédito.`;
       try {
         await db.query(
@@ -1551,10 +1635,29 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
         "UPDATE public.t_inscripciones SET estado = 'CANCELADA' WHERE id_inscripcion = $1",
         [id]
       );
-      await db.query(
-        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + 1 WHERE id_usuarios = $1',
+      const updateAccountRes = await db.query(
+        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + 1 WHERE id_usuarios = $1 RETURNING saldo_actual',
         [booking.student_id]
       );
+      if (updateAccountRes.rowCount === 0) {
+        const uBranchRes = await db.query('SELECT id_sucursales FROM public.t_usuarios WHERE id_usuarios = $1', [booking.student_id]);
+        const uBranch = uBranchRes.rows[0]?.id_sucursales?.[0] || 1;
+        await db.query(
+          'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, 1, 4, $2)',
+          [booking.student_id, uBranch]
+        );
+      }
+
+      // Registrar en historial de créditos
+      try {
+        await db.query(
+          `INSERT INTO public.t_historial_creditos (id_usuarios, cantidad, motivo, fec_movimiento, estado, monto)
+           VALUES ($1, 1, $2, NOW(), 'CONFIRMED', 0)`,
+          [booking.student_id, `Reintegro por cancelación a tiempo (${dateStr} ${startTimeStr})`]
+        );
+      } catch (histErr) {
+        console.error('Error al registrar reintegro en historial de créditos:', histErr);
+      }
     }
 
     // --- LÓGICA DE LISTA DE ESPERA (NOTIFICAR CUPOS LIBERADOS) ---
@@ -1564,8 +1667,8 @@ app.post('/api/bookings/:id/cancel', async (req, res) => {
     );
 
     if (waitlistRes.rows.length > 0) {
-      const dateStr = booking.date instanceof Date ? booking.date.toISOString().split('T')[0] : booking.date;
-      const notifyMsg = `¡Se liberó un cupo! Hay lugar disponible para la clase de las ${classTimeStr} el día ${dateStr}.`;
+      const waitlistDateStr = booking.date instanceof Date ? booking.date.toISOString().split('T')[0] : booking.date;
+      const notifyMsg = `¡Se liberó un cupo! Hay lugar disponible para la clase de las ${classTimeStr} el día ${waitlistDateStr}.`;
 
       for (const wlUser of waitlistRes.rows) {
         await db.query(
@@ -1614,13 +1717,16 @@ app.post('/api/bookings/:id/reschedule', async (req, res) => {
     const oldBooking = bookingRes.rows[0];
 
     // Validar tiempo para reprogramar (mismo que cancelar, 2hs antes)
-    const oldInstRes = await db.query('SELECT * FROM public.t_clases_instancia WHERE id_clase_instancia = $1', [oldBooking.id_clase_instancia]);
+    const oldInstRes = await db.query(
+      'SELECT ci.id_clases_def, ci.fecha_efectiva::text AS fecha_efectiva FROM public.t_clases_instancia ci WHERE ci.id_clase_instancia = $1',
+      [oldBooking.id_clase_instancia]
+    );
     const oldClassDefRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [oldInstRes.rows[0].id_clases_def]);
     
     const startTimeStr = oldClassDefRes.rows[0].hora_inicio.toString().split(' ')[0];
     const [hours, minutes] = startTimeStr.split(':').map(Number);
-    const oldClassDate = new Date(oldInstRes.rows[0].fecha_efectiva);
-    oldClassDate.setHours(hours, minutes, 0, 0);
+    const oldDateStr = String(oldInstRes.rows[0].fecha_efectiva).split('T')[0];
+    const oldClassDate = new Date(`${oldDateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
     const diffHours = (oldClassDate.getTime() - new Date().getTime()) / (1000 * 60 * 60);
 
     if (diffHours < 2) {
@@ -1645,14 +1751,40 @@ app.post('/api/bookings/:id/reschedule', async (req, res) => {
       newInstanceId = result.rows[0].id_clase_instancia;
     }
 
-    // Validar cupos en nueva clase
+    // Validar cupos y sucursal en nueva clase
+    const newClassDefRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [newClassId]);
+    if (newClassDefRes.rows.length === 0) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'El nuevo turno seleccionado no es válido.' });
+    }
+    const newClassDef = newClassDefRes.rows[0];
+
+    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [oldBooking.id_usuarios]);
+    const studentUser = userRes.rows[0];
+    if (studentUser?.rol === 'ALUMNO' && newClassDef.id_sucursal) {
+      const studentBranches = studentUser.id_sucursales || [];
+      if (!studentBranches.includes(newClassDef.id_sucursal)) {
+        await db.query('ROLLBACK');
+        return res.status(400).json({ error: 'Solo puedes reprogramar hacia turnos de tu sucursal asignada.' });
+      }
+    }
+
+    // Validar anticipación de 5 minutos en el nuevo turno
+    const newStartTimeStr = newClassDef.hora_inicio.toString().split(' ')[0];
+    const [newHours, newMinutes] = newStartTimeStr.split(':').map(Number);
+    const newDateStrClean = String(newDate).split('T')[0];
+    const newClassStart = new Date(`${newDateStrClean}T${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}:00-03:00`);
+    if (newClassStart.getTime() - new Date().getTime() < 5 * 60 * 1000) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo puedes reprogramar hacia turnos que inicien dentro de al menos 5 minutos.' });
+    }
+
     const countRes = await db.query(
       "SELECT COUNT(*) FROM public.t_inscripciones WHERE id_clase_instancia = $1 AND estado != 'CANCELADA'",
       [newInstanceId]
     );
     const activeBookingsCount = parseInt(countRes.rows[0].count);
-    const newClassDefRes = await db.query('SELECT cupo_maximo FROM public.t_clases_def WHERE id_clases_def = $1', [newClassId]);
-    if (activeBookingsCount >= newClassDefRes.rows[0].cupo_maximo) {
+    if (activeBookingsCount >= newClassDef.cupo_maximo) {
       await db.query('ROLLBACK');
       return res.status(400).json({ error: 'La nueva clase no tiene cupos disponibles.' });
     }
@@ -2008,8 +2140,10 @@ app.post('/api/students/bulk-free-credits', async (req, res) => {
       );
 
       if (profileRes.rows.length === 0) {
-        // 2. Si no tiene perfil, lo creamos con el saldo inicial
-        await db.query('INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo) VALUES ($1, $2, 4)', [sId, creditsToAdd]);
+        // 2. Si no tiene perfil, lo creamos con el saldo inicial y sucursal
+        const uBranchRes = await db.query('SELECT id_sucursales FROM public.t_usuarios WHERE id_usuarios = $1', [sId]);
+        const uBranch = uBranchRes.rows[0]?.id_sucursales?.[0] || 1;
+        await db.query('INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, $2, 4, $3)', [sId, creditsToAdd, uBranch]);
       } else {
         // 2. Acreditar créditos en t_cuenta_alumno
         await db.query(

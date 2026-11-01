@@ -366,7 +366,15 @@ export default function ClasesTabProfe({
                       <div>
                         <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--gris-oscuro)', margin: 0 }}>{b.studentName}</h4>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                          <span className="badge badge-clay" style={{ fontSize: '10px', padding: '2px 6px' }}>Créditos: {profile.classCredits}</span>
+                          <span className="badge badge-clay" style={{
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            backgroundColor: profile.classCredits < 0 ? '#FFF7ED' : undefined,
+                            color: profile.classCredits < 0 ? '#CC7A42' : undefined,
+                            border: profile.classCredits < 0 ? '1px solid #FFE5CC' : undefined
+                          }}>
+                            Créditos: {profile.classCredits < 0 ? `${profile.classCredits} (a cuenta)` : profile.classCredits}
+                          </span>
                           <span className={`badge ${profile.monthlyClayKg >= 1.0 ? 'badge-oliva' : 'badge-warning'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>Arcilla: {profile.monthlyClayKg}kg</span>
                         </div>
                       </div>
