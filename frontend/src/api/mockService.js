@@ -174,6 +174,13 @@ export const mockService = {
     return rawUsers.map(mockService.mapUserToFE);
   },
 
+  getUserById: async (userId) => {
+    await delay();
+    const rawUsers = getStorageItem('tuti_users', initialUsers);
+    const user = rawUsers.find(u => (u.id_usuario || u.id_usuarios || u.id)?.toString() === userId?.toString());
+    return user ? mockService.mapUserToFE(user) : null;
+  },
+
   createUser: async (user) => {
     await delay();
     const rawUsers = getStorageItem('tuti_users', initialUsers);

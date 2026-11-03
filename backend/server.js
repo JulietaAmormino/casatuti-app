@@ -385,7 +385,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const queryStr = `
-      SELECT u.*, 
+      SELECT u.id_usuarios, u.nombre, u.apellido, u.email, u.clave, u.rol, u.nro_documento,
+        u.google_id, u.telefono, u.instagram, u.fecha_nacimiento, u.bl_cambio_pass_pte,
+        u.secondary_role, u.genero, u.created_at,
+        CASE 
+          WHEN u.avatar_url IS NOT NULL AND length(u.avatar_url) < 1500 THEN u.avatar_url 
+          ELSE NULL 
+        END AS avatar_url,
         (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
       FROM public.t_usuarios u 
       ORDER BY u.nombre ASC
@@ -395,6 +401,27 @@ app.get('/api/users', async (req, res) => {
   } catch (error) {
     console.error('Error al listar usuarios:', error);
     res.status(500).json({ error: 'Error al obtener usuarios.' });
+  }
+});
+
+// Obtener un usuario específico por ID (incluye avatar completo)
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const queryStr = `
+      SELECT u.*, 
+        (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal 
+      FROM public.t_usuarios u 
+      WHERE u.id_usuarios = $1
+    `;
+    const { rows } = await db.query(queryStr, [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json(mapUserToFE(rows[0]));
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor al obtener usuario.' });
   }
 });
 

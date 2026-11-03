@@ -45,6 +45,11 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  getUserById: async (userId) => {
+    const res = await fetch(`${API_URL}/users/${userId}`);
+    return handleResponse(res);
+  },
+
   createUser: async (user) => {
     const res = await fetch(`${API_URL}/users`, {
       method: 'POST',

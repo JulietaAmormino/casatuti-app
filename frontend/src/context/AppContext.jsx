@@ -123,8 +123,22 @@ export const AppProvider = ({ children }) => {
         if (savedUserId) {
           const savedUser = loadedUsers.find(u => u.id?.toString() === savedUserId.toString());
           if (savedUser) {
-            setCurrentUser(savedUser);
+            const cachedAvatar = localStorage.getItem('tuti_session_user_avatar');
+            setCurrentUser(prev => ({
+              ...savedUser,
+              avatar_url: prev?.avatar_url || cachedAvatar || savedUser.avatar_url || null
+            }));
             setIsAuthenticated(true);
+
+            // Si no tenemos el avatar en cache, obtenerlo para el usuario actual de forma rápida
+            if (!cachedAvatar && !savedUser.avatar_url) {
+              mockService.getUserById(savedUserId).then(fullUser => {
+                if (fullUser && fullUser.avatar_url) {
+                  localStorage.setItem('tuti_session_user_avatar', fullUser.avatar_url);
+                  setCurrentUser(prev => prev && prev.id === fullUser.id ? { ...prev, avatar_url: fullUser.avatar_url } : prev);
+                }
+              }).catch(() => {});
+            }
           }
         }
       }
@@ -177,6 +191,11 @@ export const AppProvider = ({ children }) => {
       setCurrentUser(user);
       setIsAuthenticated(true);
       localStorage.setItem('tuti_session_user_id', user.id);
+      if (user.avatar_url) {
+        localStorage.setItem('tuti_session_user_avatar', user.avatar_url);
+      } else {
+        localStorage.removeItem('tuti_session_user_avatar');
+      }
       return user;
     } finally {
       setLoading(false);
@@ -198,6 +217,7 @@ export const AppProvider = ({ children }) => {
     setCurrentUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('tuti_session_user_id');
+    localStorage.removeItem('tuti_session_user_avatar');
   };
 
   // Cambiar rol de un usuario (para soporte / configurador)
@@ -242,7 +262,11 @@ export const AppProvider = ({ children }) => {
     setLoading(true);
     try {
       const updatedUser = await mockService.switchProfile(currentUser.id);
-      setCurrentUser(updatedUser);
+      const cachedAvatar = localStorage.getItem('tuti_session_user_avatar');
+      setCurrentUser({
+        ...updatedUser,
+        avatar_url: updatedUser.avatar_url || currentUser.avatar_url || cachedAvatar || null
+      });
       await loadData();
     } catch (err) {
       console.error("Error cambiando de perfil", err);
@@ -770,12 +794,18 @@ export const AppProvider = ({ children }) => {
 
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
+      if (updatedFields.avatar_url) {
+        localStorage.setItem('tuti_session_user_avatar', updatedFields.avatar_url);
+      }
     }
 
     try {
       const updatedUser = await mockService.updateUser(userId, userData);
-      if (currentUser && currentUser.id === userId && updatedUser?.sucursal) {
+      if (currentUser && currentUser.id === userId) {
         setCurrentUser(prev => ({ ...prev, ...updatedUser }));
+        if (updatedUser?.avatar_url) {
+          localStorage.setItem('tuti_session_user_avatar', updatedUser.avatar_url);
+        }
       }
       Promise.all([
         mockService.getUsers().then(setUsers),
