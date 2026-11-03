@@ -1388,21 +1388,20 @@ app.post('/api/bookings', async (req, res) => {
 
   try {
     // 1. Obtener perfil de créditos y datos de clase
-    const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [studentId]);
+    let profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [studentId]);
     const classRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [classId]);
 
-    if (profileRes.rows.length === 0 || classRes.rows.length === 0) {
-      return res.status(400).json({ error: 'Estudiante o clase no válidos.' });
+    if (classRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Clase no válida.' });
     }
 
-    const profile = profileRes.rows[0];
     const classData = classRes.rows[0];
     const className = "Clase";
     const classDay = classData.dia_semana;
     const classTime = `${classData.hora_inicio} - ${classData.hora_fin}`;
 
     // Validar sucursal del estudiante
-    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
+    const userRes = await db.query('SELECT id_usuarios, id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: 'Estudiante no encontrado.' });
     }
@@ -1413,6 +1412,18 @@ app.post('/api/bookings', async (req, res) => {
         return res.status(400).json({ error: 'Solo puedes inscribirte en clases de tu sucursal asignada.' });
       }
     }
+
+    // Si no tiene registro en t_cuenta_alumno, lo inicializamos con saldo 0
+    if (profileRes.rows.length === 0) {
+      const uBranch = studentUser.id_sucursales?.[0] || classData.id_sucursal || 1;
+      const createdAcc = await db.query(
+        'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, 0, 4, $2) RETURNING *',
+        [studentId, uBranch]
+      );
+      profileRes = createdAcc;
+    }
+
+    const profile = profileRes.rows[0];
 
     // Validar anticipación de 5 minutos (con huso horario de Argentina -03:00)
     const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
@@ -1430,17 +1441,18 @@ app.post('/api/bookings', async (req, res) => {
       return res.status(400).json({ error: 'Tu cuenta está pausada. No puedes realizar nuevas reservas.' });
     }
 
-    // 3. Validar si el estudiante posee créditos o regla de clase a cuenta del 1 al 10
+    // 3. Validar si el estudiante posee créditos o regla de clase a cuenta del 1 al 10 / docente
     const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
       day: 'numeric'
     }).format(new Date()), 10);
     const isGracePeriod = currentDay >= 1 && currentDay <= 10;
+    const isTeacher = !!req.body.isTeacher;
 
     if (profile.saldo_actual <= 0) {
-      const allowOnAccount = (isGracePeriod && profile.saldo_actual === 0) || (req.body.isTeacher && profile.saldo_actual === 0);
+      const allowOnAccount = (isGracePeriod && profile.saldo_actual === 0) || (isTeacher && profile.saldo_actual === 0);
       if (allowOnAccount) {
-        // Permitido: Clase a cuenta del 1 al 10 (su saldo pasará a -1 al debitarse)
+        // Permitido: Clase a cuenta (su saldo pasará a -1 al debitarse)
       } else {
         if (profile.saldo_actual < 0) {
           return res.status(400).json({
@@ -1493,7 +1505,7 @@ app.post('/api/bookings', async (req, res) => {
     );
     const activeBookingsCount = parseInt(countRes.rows[0].count);
 
-    if (activeBookingsCount >= classData.cupo_maximo) {
+    if (!req.body.isTeacher && activeBookingsCount >= classData.cupo_maximo) {
       return res.status(400).json({ error: 'Esta clase ya no tiene cupos disponibles para la fecha seleccionada.' });
     }
 
@@ -1988,6 +2000,30 @@ app.put('/api/insumos/:id/confirm', async (req, res) => {
   }
 });
 
+// Cancelar/Eliminar una deuda de insumo pendiente
+app.put('/api/insumos/:id/cancel', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const debtRes = await db.query('SELECT * FROM public.t_deudas_insumos WHERE id_deudas_insumos = $1', [id]);
+    if (debtRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Deuda de insumo no encontrada.' });
+    }
+
+    const debt = debtRes.rows[0];
+    if (debt.bl_pagado) {
+      return res.status(400).json({ error: 'No se puede cancelar un insumo que ya fue marcado como pagado.' });
+    }
+
+    await db.query('DELETE FROM public.t_deudas_insumos WHERE id_deudas_insumos = $1', [id]);
+
+    res.json({ success: true, message: 'Deuda de insumo cancelada y eliminada.' });
+  } catch (error) {
+    console.error('Error al cancelar deuda de insumo:', error);
+    res.status(500).json({ error: 'Error al cancelar la deuda de insumo.' });
+  }
+});
+
 // Registrar un horneado
 app.post('/api/bakes', async (req, res) => {
   const { studentId, price, description } = req.body;
@@ -2106,10 +2142,18 @@ app.post('/api/payments', async (req, res) => {
       );
 
       // 2. Acreditar créditos en t_cuenta_alumno
-      await db.query(
-        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+      const updAcc = await db.query(
+        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2 RETURNING saldo_actual',
         [creditsToAdd, sId]
       );
+      if (updAcc.rows.length === 0) {
+        const uBranchRes = await db.query('SELECT id_sucursales FROM public.t_usuarios WHERE id_usuarios = $1', [sId]);
+        const uBranch = uBranchRes.rows[0]?.id_sucursales?.[0] || 1;
+        await db.query(
+          'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, $2, 4, $3)',
+          [sId, creditsToAdd, uBranch]
+        );
+      }
     }
 
     res.status(201).json({ success: true });
@@ -2339,11 +2383,24 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
       return res.status(400).json({ error: 'El pago ya se encuentra confirmado.' });
     }
 
-    // Acreditar los créditos
-    await db.query(
-      'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+    // Acreditar los créditos (compensando saldo negativo si debía clase a cuenta)
+    const updateAcc = await db.query(
+      'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2 RETURNING saldo_actual',
       [payment.cantidad, payment.id_usuarios]
     );
+
+    let nuevoSaldo = payment.cantidad;
+    if (updateAcc.rows.length === 0) {
+      const uBranchRes = await db.query('SELECT id_sucursales FROM public.t_usuarios WHERE id_usuarios = $1', [payment.id_usuarios]);
+      const uBranch = uBranchRes.rows[0]?.id_sucursales?.[0] || 1;
+      const insAcc = await db.query(
+        'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, $2, 4, $3) RETURNING saldo_actual',
+        [payment.id_usuarios, payment.cantidad, uBranch]
+      );
+      nuevoSaldo = insAcc.rows[0]?.saldo_actual ?? payment.cantidad;
+    } else {
+      nuevoSaldo = updateAcc.rows[0].saldo_actual;
+    }
 
     // Cambiar estado a PAID y setear la fecha de movimiento
     const updateDate = confirmationDate ? new Date(confirmationDate) : new Date();
@@ -2352,12 +2409,21 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
       ['PAID', 'Acreditación por Pago Confirmado', updateDate, id]
     );
 
-    // Notificar a la alumna por push
+    // Notificar a la alumna por push y alerta interna
     try {
+      const pushMsg = nuevoSaldo < payment.cantidad
+        ? `Tu pago de ${payment.cantidad} clases fue confirmado. Se saldó tu clase a cuenta y te quedan ${nuevoSaldo} clases disponibles.`
+        : `Tu pago de ${payment.cantidad} crédito${payment.cantidad === 1 ? '' : 's'} fue confirmado. ¡Ya podés reservar tus clases!`;
+
+      await db.query(
+        'INSERT INTO public.t_notificaciones (id_usuarios, titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, $4, false, NOW())',
+        [payment.id_usuarios, '✅ Pago confirmado', pushMsg, 'INFO']
+      );
+
       await sendPush(
         payment.id_usuarios,
         '✅ Pago confirmado',
-        `Tu pago de ${payment.cantidad} crédito${payment.cantidad === 1 ? '' : 's'} fue confirmado. ¡Ya podés reservar tus clases!`
+        pushMsg
       );
     } catch (pushErr) {
       console.error('[Push] Error notificando alumna sobre confirmación de pago:', pushErr.message);
@@ -2367,6 +2433,52 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
   } catch (error) {
     console.error('Error al confirmar pago:', error);
     res.status(500).json({ error: 'Error al confirmar el pago.' });
+  }
+});
+
+// Cancelar un pago pendiente (por parte del admin)
+app.put('/api/payments/:id/cancel', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const paymentRes = await db.query('SELECT * FROM public.t_historial_creditos WHERE id_historial_credito = $1', [id]);
+    if (paymentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Pago pendiente no encontrado.' });
+    }
+
+    const payment = paymentRes.rows[0];
+    if (payment.estado === 'PAID') {
+      return res.status(400).json({ error: 'No se puede cancelar un pago que ya fue confirmado.' });
+    }
+
+    // Cambiar estado a CANCELLED
+    await db.query(
+      'UPDATE public.t_historial_creditos SET estado = $1, motivo = $2, fec_movimiento = NOW() WHERE id_historial_credito = $3',
+      ['CANCELLED', 'Solicitud de Pago Cancelada', id]
+    );
+
+    // Notificar a la alumna (alerta interna y push)
+    try {
+      if (payment.id_usuarios) {
+        await db.query(
+          `INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at, id_usuarios) 
+           VALUES ($1, $2, $3, false, NOW(), $4)`,
+          ['Solicitud de Pago Cancelada', `Tu solicitud de compra de ${payment.cantidad} clases por $${Number(payment.monto || 0).toLocaleString('es-AR')} fue cancelada por la administración. No se generó deuda.`, 'INFO', payment.id_usuarios]
+        );
+        await sendPush(
+          payment.id_usuarios,
+          'Solicitud de Pago Cancelada',
+          `Tu solicitud de compra de ${payment.cantidad} clases por $${Number(payment.monto || 0).toLocaleString('es-AR')} fue cancelada.`
+        );
+      }
+    } catch (notifErr) {
+      console.warn('[Notif] Error enviando notificación de cancelación:', notifErr.message);
+    }
+
+    res.json({ success: true, message: 'Pago cancelado exitosamente.' });
+  } catch (error) {
+    console.error('Error al cancelar pago:', error);
+    res.status(500).json({ error: 'Error al cancelar el pago.' });
   }
 });
 

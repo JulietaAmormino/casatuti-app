@@ -80,8 +80,19 @@ export default function AlumnosTabProfe({ currentUser, users, classes, bookings,
                   <span className={`badge ${student.clay >= 1.0 ? 'badge-oliva' : 'badge-clay'}`} style={{ fontSize: '10px', padding: '4px 8px', display: 'block', marginBottom: '4px' }}>
                     Arcilla: {student.clay}kg
                   </span>
-                  <span className="badge badge-secondary" style={{ fontSize: '10px', padding: '4px 8px', display: 'block' }}>
-                    Créditos: {student.credits}
+                  <span 
+                    className={`badge ${student.credits > 0 ? 'badge-secondary' : student.credits === 0 ? 'badge-clay' : 'badge-danger'}`} 
+                    style={{ 
+                      fontSize: '10px', 
+                      padding: '4px 8px', 
+                      display: 'block',
+                      backgroundColor: student.credits < 0 ? '#FFF5F5' : undefined,
+                      color: student.credits < 0 ? '#E53E3E' : undefined,
+                      border: student.credits < 0 ? '1px solid #FED7D7' : undefined,
+                      fontWeight: 700
+                    }}
+                  >
+                    {student.credits < 0 ? 'A cuenta (-1)' : `Créditos: ${student.credits}`}
                   </span>
                 </div>
               </div>

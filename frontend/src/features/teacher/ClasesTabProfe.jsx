@@ -133,7 +133,13 @@ export default function ClasesTabProfe({
   };
 
   const handleRemoveStudent = async (booking) => {
-    if (window.confirm(`¿Seguro que querés quitar a ${booking.studentName} de esta clase y devolverle el crédito?`)) {
+    const studentProf = studentProfiles?.find(p => p.studentId === booking.studentId);
+    const isNegative = (studentProf?.classCredits ?? 0) <= 0;
+    const msgConfirm = isNegative 
+      ? `¿Seguro que querés quitar a ${booking.studentName} de esta clase? Se saldará su saldo a cuenta y volverá a 0 créditos.`
+      : `¿Seguro que querés quitar a ${booking.studentName} de esta clase y devolverle el crédito?`;
+
+    if (window.confirm(msgConfirm)) {
       try {
         setErrorMessage('');
         await cancelBooking(booking.id, false, true); // forceRefund = true

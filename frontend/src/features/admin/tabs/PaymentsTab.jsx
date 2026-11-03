@@ -15,7 +15,9 @@ export default function PaymentsTab({ showFeedback }) {
     packs,
     recordStudentPayment,
     confirmPendingPayment,
+    cancelPendingPayment,
     confirmInsumoPayment,
+    cancelInsumoPayment,
     sendTransferReminder,
     branches,
     bakes
@@ -243,6 +245,34 @@ export default function PaymentsTab({ showFeedback }) {
     }
   };
 
+  const handleBulkCancel = async () => {
+    if (selectedPayments.length === 0) {
+      showFeedback('Por favor, seleccioná al menos un pago para cancelar.', 'danger');
+      return;
+    }
+    if (!window.confirm(`¿Estás seguro de cancelar ${selectedPayments.length} solicitudes de pago? Se eliminará la deuda de las alumnas y no se les cargarán créditos.`)) return;
+    setIsProcessingBulk(true);
+    let successCount = 0;
+    for (const id of selectedPayments) {
+      try {
+        const isBake = pendingBakes.some(b => b.id === id);
+        if (isBake) {
+          await cancelInsumoPayment(id);
+        } else {
+          await cancelPendingPayment(id);
+        }
+        successCount++;
+      } catch (e) {
+        console.error(`Error cancelando pago ${id}:`, e);
+      }
+    }
+    setIsProcessingBulk(false);
+    setSelectedPayments([]);
+    if (successCount > 0) {
+      showFeedback(`Se cancelaron ${successCount} solicitudes de pago correctamente.`, 'info');
+    }
+  };
+
   const searchedStudents = students.filter(s => s.name.toLowerCase().includes(searchStudent.toLowerCase()));
 
   return (
@@ -387,20 +417,58 @@ export default function PaymentsTab({ showFeedback }) {
                           ✓ Confirmar
                         </button>
 
-                        <button
-                          onClick={async () => {
-                            try {
-                              await sendTransferReminder(p.id);
-                              showFeedback(`Recordatorio enviado a ${st?.name}.`, 'info');
-                            } catch (err) {
-                              showFeedback(err.message, 'danger');
-                            }
-                          }}
-                          className="btn-tuti btn-secondary"
-                          style={{ fontSize: '11px', padding: '6px 12px', backgroundColor: 'var(--blanco)', display: 'flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <NotificationsActiveIcon style={{ fontSize: '14px' }} /> Notificar
-                        </button>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await sendTransferReminder(p.id);
+                                showFeedback(`Recordatorio enviado a ${st?.name}.`, 'info');
+                              } catch (err) {
+                                showFeedback(err.message, 'danger');
+                              }
+                            }}
+                            className="btn-tuti btn-secondary"
+                            style={{ fontSize: '11px', padding: '6px 8px', backgroundColor: 'var(--blanco)', display: 'flex', alignItems: 'center', gap: '2px', flex: 1, justifyContent: 'center' }}
+                            title="Enviar recordatorio de transferencia"
+                          >
+                            <NotificationsActiveIcon style={{ fontSize: '13px' }} /> Notificar
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`¿Estás seguro de cancelar la solicitud de pago de ${st?.name || 'la alumna'}? No se le cargarán créditos y se eliminará la deuda pendiente.`)) return;
+                              try {
+                                if (p.isInsumo) {
+                                  await cancelInsumoPayment(p.id);
+                                } else {
+                                  await cancelPendingPayment(p.id);
+                                }
+                                showFeedback(`Pago de ${st?.name || 'alumna'} cancelado.`, 'info');
+                              } catch (err) {
+                                showFeedback(err.message || 'Error al cancelar', 'danger');
+                              }
+                            }}
+                            className="btn-tuti"
+                            style={{
+                              fontSize: '11px',
+                              padding: '6px 8px',
+                              backgroundColor: '#FFF5F5',
+                              color: '#E53E3E',
+                              border: '1px solid #FED7D7',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '2px',
+                              flex: 1,
+                              borderRadius: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                            title="Cancelar solicitud de pago y eliminar deuda"
+                          >
+                            ✕ Cancelar
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -779,12 +847,12 @@ export default function PaymentsTab({ showFeedback }) {
           <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gris-oscuro)', lineHeight: 1.2, flexShrink: 0 }}>
             {selectedPayments.length} sel.
           </span>
-          <div style={{ display: 'flex', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'flex-end' }}>
             <button
               onClick={handleBulkConfirm}
               disabled={isProcessingBulk}
               className="btn-tuti btn-primary-clay"
-              style={{ fontSize: '12px', padding: '8px 12px', flex: 1, whiteSpace: 'nowrap' }}
+              style={{ fontSize: '12px', padding: '8px 10px', flex: 1, whiteSpace: 'nowrap' }}
             >
               {isProcessingBulk ? '...' : '✓ Confirmar'}
             </button>
@@ -792,9 +860,26 @@ export default function PaymentsTab({ showFeedback }) {
               onClick={handleBulkNotify}
               disabled={isProcessingBulk}
               className="btn-tuti btn-secondary"
-              style={{ fontSize: '12px', padding: '8px 12px', flex: 1, whiteSpace: 'nowrap' }}
+              style={{ fontSize: '12px', padding: '8px 10px', flex: 1, whiteSpace: 'nowrap' }}
             >
               Notificar
+            </button>
+            <button
+              onClick={handleBulkCancel}
+              disabled={isProcessingBulk}
+              className="btn-tuti"
+              style={{
+                fontSize: '12px',
+                padding: '8px 10px',
+                flex: 1,
+                whiteSpace: 'nowrap',
+                backgroundColor: '#FFF5F5',
+                color: '#E53E3E',
+                border: '1px solid #FED7D7',
+                fontWeight: 700
+              }}
+            >
+              ✕ Cancelar
             </button>
           </div>
         </div>

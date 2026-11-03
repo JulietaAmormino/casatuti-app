@@ -253,7 +253,8 @@ export const apiService = {
         studentId: bookingData.studentId,
         studentName: bookingData.studentName,
         classId: bookingData.classId,
-        date: bookingData.date
+        date: bookingData.date,
+        isTeacher: !!bookingData.isTeacher
       })
     });
     return handleResponse(res);
@@ -387,8 +388,24 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  cancelPayment: async (paymentId) => {
+    const res = await fetch(`${API_URL}/payments/${paymentId}/cancel`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
   confirmInsumoPayment: async (insumoId) => {
     const res = await fetch(`${API_URL}/insumos/${insumoId}/confirm`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
+  cancelInsumoPayment: async (insumoId) => {
+    const res = await fetch(`${API_URL}/insumos/${insumoId}/cancel`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' }
     });

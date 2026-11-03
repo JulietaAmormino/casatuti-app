@@ -388,7 +388,7 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
           <div className="modal-content animate-scale-up" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '20px', color: 'var(--gris-oscuro)' }}>
-                {buyStep === 1 ? 'Comprar créditos' : 'Realizar transferencia'}
+                {buyStep === 1 ? 'Comprar créditos' : (buyStep === 'confirm' ? 'Confirmar compra' : 'Realizar transferencia')}
               </h2>
               <button onClick={() => !buyLoading && setShowBuyModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: 'var(--gris-medio)' }}>×</button>
             </div>
@@ -400,7 +400,8 @@ export default function AlumnoView({ activeTab = 'inicio', setActiveTab }) {
               setSelectedPackId={setSelectedPackId}
               selectedPack={selectedPack}
               buyStep={buyStep}
-              setBuyStep={buyStep === 2 ? () => setShowBuyModal(false) : setBuyStep}
+              setBuyStep={setBuyStep}
+              onCloseModal={() => setShowBuyModal(false)}
               buyLoading={buyLoading}
               onBuy={handleBuy}
               payments={payments}
