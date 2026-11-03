@@ -21,6 +21,14 @@ function AppContentWrapper() {
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [adminTab, setAdminTab] = useState('dashboard');
 
+  // Resetear vista override cuando cambia el usuario o el rol activo (ej. switchProfile)
+  useEffect(() => {
+    setViewOverride(null);
+    if (currentUser?.role === 'ADMIN') {
+      setAdminTab('dashboard');
+    }
+  }, [currentUser?.id, currentUser?.role]);
+
   const userAlerts = (alerts || []).filter(a => 
     !a.resolved && (currentUser?.role === 'ADMIN' || a.studentId === currentUser?.id)
   );
@@ -436,6 +444,8 @@ function AppContentWrapper() {
                   <button 
                     className="dropdown-item-header" 
                     onClick={() => {
+                      setViewOverride(null);
+                      setAdminTab('dashboard');
                       switchProfile();
                       setShowHeaderDropdown(false);
                     }}
@@ -469,7 +479,7 @@ function AppContentWrapper() {
       {/* Navbar Móvil Flotante Inferior */}
       {!(currentUser?.role === 'ADMIN' && (adminTab === 'config' || adminTab === 'reports')) && (
         <div className="mobile-navbar-floating">
-          {currentUser?.role === 'ADMIN' && viewOverride === null ? (
+          {currentUser?.role === 'ADMIN' && viewOverride !== 'config' ? (
           <>
             {/* Resumen */}
             <button
