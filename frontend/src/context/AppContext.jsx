@@ -146,15 +146,27 @@ export const AppProvider = ({ children }) => {
     let isPolling = true;
     const pollData = async () => {
       while (isPolling) {
-        await new Promise(resolve => setTimeout(resolve, 30000));
-        if (isPolling) {
+        // Intervalo de 2 minutos y solo si la pestaña está activa y visible
+        await new Promise(resolve => setTimeout(resolve, 120000));
+        if (isPolling && typeof document !== 'undefined' && document.visibilityState === 'visible') {
           await loadData(true);
         }
       }
     };
     pollData();
 
-    return () => { isPolling = false; };
+    // Recargar datos cuando el usuario vuelve a la app (al cambiar de app o desbloquear pantalla)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => { 
+      isPolling = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Login Acción
