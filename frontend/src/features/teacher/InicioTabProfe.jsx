@@ -4,6 +4,7 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { formatDateDDMMYYYY } from '../../utils/dateUtils';
 import GroupIcon from '@mui/icons-material/Group';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import SearchIcon from '@mui/icons-material/Search';
 
 // Días y meses para formateo
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -24,6 +25,7 @@ export default function InicioTabProfe({
   setActiveTab
 }) {
   const [selectedStudentToAdd, setSelectedStudentToAdd] = useState('');
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
   const [isAddingStudent, setIsAddingStudent] = useState(false);
 
   const [studentActionMenu, setStudentActionMenu] = useState(null);
@@ -90,15 +92,53 @@ export default function InicioTabProfe({
 
   // Alumnos que pueden ser agregados
   const availableStudentsToAdd = useMemo(() => {
-    if (!users) return [];
+    if (!users || !nextClassData) return [];
     const enrolledIds = nextClassBookings.map(b => b.studentId);
-    return users.filter(u => 
-      u.role === 'ALUMNO' && 
-      !enrolledIds.includes(u.id) &&
-      // Sólo alumnos con perfil activo y créditos
-      studentProfiles?.find(p => p.studentId === u.id && p.classCredits > 0 && !p.isBlocked)
-    ).sort((a, b) => a.name.localeCompare(b.name));
-  }, [users, nextClassBookings, studentProfiles]);
+    const classBranch = (nextClassData.classObj?.sucursal || '').trim().toUpperCase();
+
+    return users.filter(u => {
+      // 1. Rol Alumno
+      if (u.role !== 'ALUMNO') return false;
+
+      // 2. No inscripto previamente en este turno
+      if (enrolledIds.includes(u.id)) return false;
+
+      // 3. Filtrar por sucursal de la clase
+      if (classBranch) {
+        const userBranches = (u.sucursal || 'CENTRO')
+          .toUpperCase()
+          .split(',')
+          .map(s => s.trim());
+        const belongsToBranch = userBranches.some(b => 
+          b === classBranch || classBranch.includes(b) || b.includes(classBranch)
+        );
+        if (!belongsToBranch) return false;
+      }
+
+      // 4. Perfil activo (no bloqueado y sin saldo negativo < 0)
+      const profile = studentProfiles?.find(p => p.studentId === u.id);
+      if (profile?.isBlocked) return false;
+      if (profile && profile.classCredits < 0) return false;
+
+      return true;
+    }).map(u => {
+      const profile = studentProfiles?.find(p => p.studentId === u.id);
+      const credits = profile ? profile.classCredits : 0;
+      return {
+        ...u,
+        credits
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, nextClassBookings, nextClassData, studentProfiles]);
+
+  // Alumnos filtrados por término de búsqueda (nombre)
+  const filteredStudentsToAdd = useMemo(() => {
+    if (!studentSearchTerm.trim()) return availableStudentsToAdd;
+    const term = studentSearchTerm.toLowerCase().trim();
+    return availableStudentsToAdd.filter(u => 
+      u.name && u.name.toLowerCase().includes(term)
+    );
+  }, [availableStudentsToAdd, studentSearchTerm]);
 
   const handleAddStudentAndMarkPresent = async () => {
     if (!selectedStudentToAdd || !nextClassData) return;
@@ -115,6 +155,7 @@ export default function InicioTabProfe({
         await takeAttendance(newBooking.id, 'ATTENDED');
       }
       setSelectedStudentToAdd('');
+      setStudentSearchTerm('');
       alert("Alumno/a agregado/a y marcado/a como presente con éxito.");
     } catch (error) {
       alert("Error al agregar alumno/a: " + error.message);
@@ -464,13 +505,73 @@ export default function InicioTabProfe({
             )}
 
             {/* Agregar Alumno/a Extra */}
-            <div style={{ backgroundColor: 'var(--bg-crema)', padding: '16px', borderRadius: '16px', border: '1px dashed var(--gris-claro)' }}>
-              <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--gris-oscuro)', marginBottom: '8px' }}>
-                Agregar alumno/a de forma excepcional
-              </h5>
-              <p style={{ fontSize: '11px', color: 'var(--gris-medio)', marginBottom: '12px' }}>
-                Si un/a alumno/a asistió pero no estaba anotado/a, podés sumarlo/a acá. (Se le descontará 1 crédito).
+            <div style={{ backgroundColor: 'var(--bg-crema)', padding: '16px', borderRadius: '16px', border: '1px dashed var(--gris-claro)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                <h5 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: 0 }}>
+                  Agregar alumno/a de forma excepcional
+                </h5>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--verde-oliva)', backgroundColor: '#EAF2E8', padding: '3px 8px', borderRadius: '8px' }}>
+                  {nextClassData.classObj.sucursal || 'CENTRO'} ({availableStudentsToAdd.length} alumnos/as)
+                </span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--gris-medio)', margin: 0 }}>
+                Si un/a alumno/a asistió pero no estaba anotado/a, podés buscarlo/a y sumarlo/a acá. (Se le descontará 1 crédito).
               </p>
+
+              {/* Buscador de Alumnos */}
+              <div style={{ position: 'relative' }}>
+                <SearchIcon style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px', color: 'var(--gris-medio)' }} />
+                <input 
+                  type="text" 
+                  className="input-tuti" 
+                  placeholder="Buscar alumno/a por nombre..." 
+                  value={studentSearchTerm}
+                  onChange={e => setStudentSearchTerm(e.target.value)}
+                  style={{ width: '100%', paddingLeft: '34px', paddingRight: studentSearchTerm ? '32px' : '12px', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+                {studentSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setStudentSearchTerm('')}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--gris-medio)', fontSize: '14px', fontWeight: 'bold' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Sugerencias Rápidas al Buscar (1 a 4 resultados) */}
+              {studentSearchTerm && filteredStudentsToAdd.length > 0 && filteredStudentsToAdd.length <= 4 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {filteredStudentsToAdd.map(u => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => setSelectedStudentToAdd(String(u.id))}
+                      style={{
+                        border: selectedStudentToAdd === String(u.id) ? '2px solid var(--verde-oliva)' : '1px solid #dcd7ce',
+                        backgroundColor: selectedStudentToAdd === String(u.id) ? '#EAF2E8' : 'var(--blanco)',
+                        color: 'var(--gris-oscuro)',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <span>{u.name}</span>
+                      <span style={{ fontSize: '10px', color: u.credits > 0 ? 'var(--verde-oliva)' : 'var(--marron-arcilla)' }}>
+                        ({u.credits > 0 ? `${u.credits} disp.` : 'a cuenta'})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Selector y Botón */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <select 
                   className="input-tuti" 
@@ -478,9 +579,15 @@ export default function InicioTabProfe({
                   onChange={e => setSelectedStudentToAdd(e.target.value)}
                   style={{ flex: '1 1 200px', padding: '10px 12px', fontSize: '13px' }}
                 >
-                  <option value="">-- Seleccionar alumno/a --</option>
-                  {availableStudentsToAdd.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+                  <option value="">
+                    {filteredStudentsToAdd.length === 0 
+                      ? (studentSearchTerm ? '-- Sin resultados para la búsqueda --' : '-- No hay alumnos/as en esta sucursal --')
+                      : `-- Seleccionar alumno/a (${filteredStudentsToAdd.length}) --`}
+                  </option>
+                  {filteredStudentsToAdd.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.credits > 0 ? `${u.credits} disp.` : '0 disp. - a cuenta'})
+                    </option>
                   ))}
                 </select>
                 <button 

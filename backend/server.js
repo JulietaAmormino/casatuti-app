@@ -1334,7 +1334,7 @@ app.post('/api/waitlist', async (req, res) => {
     const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
     const diffMs = classStartDateTime.getTime() - new Date().getTime();
 
-    if (diffMs < 5 * 60 * 1000) {
+    if (!req.body.isTeacher && diffMs < 5 * 60 * 1000) {
       return res.status(400).json({ error: 'Solo puedes unirte a la lista de espera hasta 5 minutos antes del inicio de la clase.' });
     }
 
@@ -1421,7 +1421,7 @@ app.post('/api/bookings', async (req, res) => {
     const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
     const diffMs = classStartDateTime.getTime() - new Date().getTime();
 
-    if (diffMs < 5 * 60 * 1000) {
+    if (!req.body.isTeacher && diffMs < 5 * 60 * 1000) {
       return res.status(400).json({ error: 'Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.' });
     }
 
@@ -1438,12 +1438,13 @@ app.post('/api/bookings', async (req, res) => {
     const isGracePeriod = currentDay >= 1 && currentDay <= 10;
 
     if (profile.saldo_actual <= 0) {
-      if (isGracePeriod && profile.saldo_actual === 0) {
+      const allowOnAccount = (isGracePeriod && profile.saldo_actual === 0) || (req.body.isTeacher && profile.saldo_actual === 0);
+      if (allowOnAccount) {
         // Permitido: Clase a cuenta del 1 al 10 (su saldo pasará a -1 al debitarse)
       } else {
-        if (isGracePeriod && profile.saldo_actual < 0) {
+        if (profile.saldo_actual < 0) {
           return res.status(400).json({
-            error: 'Ya utilizaste tu clase a cuenta del período del 1 al 10. Para continuar reservando debes adquirir tu pack mensual.'
+            error: 'La alumna ya utilizó su clase a cuenta y posee saldo negativo (-1). Para continuar debe adquirir su pack mensual.'
           });
         }
 
