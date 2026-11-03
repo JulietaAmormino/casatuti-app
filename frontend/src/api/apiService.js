@@ -253,7 +253,8 @@ export const apiService = {
         studentId: bookingData.studentId,
         studentName: bookingData.studentName,
         classId: bookingData.classId,
-        date: bookingData.date
+        date: bookingData.date,
+        isTeacher: !!bookingData.isTeacher
       })
     });
     return handleResponse(res);

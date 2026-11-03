@@ -1388,21 +1388,20 @@ app.post('/api/bookings', async (req, res) => {
 
   try {
     // 1. Obtener perfil de créditos y datos de clase
-    const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [studentId]);
+    let profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [studentId]);
     const classRes = await db.query('SELECT * FROM public.t_clases_def WHERE id_clases_def = $1', [classId]);
 
-    if (profileRes.rows.length === 0 || classRes.rows.length === 0) {
-      return res.status(400).json({ error: 'Estudiante o clase no válidos.' });
+    if (classRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Clase no válida.' });
     }
 
-    const profile = profileRes.rows[0];
     const classData = classRes.rows[0];
     const className = "Clase";
     const classDay = classData.dia_semana;
     const classTime = `${classData.hora_inicio} - ${classData.hora_fin}`;
 
     // Validar sucursal del estudiante
-    const userRes = await db.query('SELECT id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
+    const userRes = await db.query('SELECT id_usuarios, id_sucursales, rol FROM public.t_usuarios WHERE id_usuarios = $1', [studentId]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: 'Estudiante no encontrado.' });
     }
@@ -1413,6 +1412,18 @@ app.post('/api/bookings', async (req, res) => {
         return res.status(400).json({ error: 'Solo puedes inscribirte en clases de tu sucursal asignada.' });
       }
     }
+
+    // Si no tiene registro en t_cuenta_alumno, lo inicializamos con saldo 0
+    if (profileRes.rows.length === 0) {
+      const uBranch = studentUser.id_sucursales?.[0] || classData.id_sucursal || 1;
+      const createdAcc = await db.query(
+        'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, 0, 4, $2) RETURNING *',
+        [studentId, uBranch]
+      );
+      profileRes = createdAcc;
+    }
+
+    const profile = profileRes.rows[0];
 
     // Validar anticipación de 5 minutos (con huso horario de Argentina -03:00)
     const startTimeStr = classData.hora_inicio.toString().split(' ')[0];
@@ -1430,17 +1441,18 @@ app.post('/api/bookings', async (req, res) => {
       return res.status(400).json({ error: 'Tu cuenta está pausada. No puedes realizar nuevas reservas.' });
     }
 
-    // 3. Validar si el estudiante posee créditos o regla de clase a cuenta del 1 al 10
+    // 3. Validar si el estudiante posee créditos o regla de clase a cuenta del 1 al 10 / docente
     const currentDay = parseInt(new Intl.DateTimeFormat('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
       day: 'numeric'
     }).format(new Date()), 10);
     const isGracePeriod = currentDay >= 1 && currentDay <= 10;
+    const isTeacher = !!req.body.isTeacher;
 
     if (profile.saldo_actual <= 0) {
-      const allowOnAccount = (isGracePeriod && profile.saldo_actual === 0) || (req.body.isTeacher && profile.saldo_actual === 0);
+      const allowOnAccount = (isGracePeriod && profile.saldo_actual === 0) || (isTeacher && profile.saldo_actual === 0);
       if (allowOnAccount) {
-        // Permitido: Clase a cuenta del 1 al 10 (su saldo pasará a -1 al debitarse)
+        // Permitido: Clase a cuenta (su saldo pasará a -1 al debitarse)
       } else {
         if (profile.saldo_actual < 0) {
           return res.status(400).json({
@@ -1493,7 +1505,7 @@ app.post('/api/bookings', async (req, res) => {
     );
     const activeBookingsCount = parseInt(countRes.rows[0].count);
 
-    if (activeBookingsCount >= classData.cupo_maximo) {
+    if (!req.body.isTeacher && activeBookingsCount >= classData.cupo_maximo) {
       return res.status(400).json({ error: 'Esta clase ya no tiene cupos disponibles para la fecha seleccionada.' });
     }
 
@@ -2130,10 +2142,18 @@ app.post('/api/payments', async (req, res) => {
       );
 
       // 2. Acreditar créditos en t_cuenta_alumno
-      await db.query(
-        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+      const updAcc = await db.query(
+        'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2 RETURNING saldo_actual',
         [creditsToAdd, sId]
       );
+      if (updAcc.rows.length === 0) {
+        const uBranchRes = await db.query('SELECT id_sucursales FROM public.t_usuarios WHERE id_usuarios = $1', [sId]);
+        const uBranch = uBranchRes.rows[0]?.id_sucursales?.[0] || 1;
+        await db.query(
+          'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, $2, 4, $3)',
+          [sId, creditsToAdd, uBranch]
+        );
+      }
     }
 
     res.status(201).json({ success: true });
@@ -2363,11 +2383,24 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
       return res.status(400).json({ error: 'El pago ya se encuentra confirmado.' });
     }
 
-    // Acreditar los créditos
-    await db.query(
-      'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2',
+    // Acreditar los créditos (compensando saldo negativo si debía clase a cuenta)
+    const updateAcc = await db.query(
+      'UPDATE public.t_cuenta_alumno SET saldo_actual = saldo_actual + $1 WHERE id_usuarios = $2 RETURNING saldo_actual',
       [payment.cantidad, payment.id_usuarios]
     );
+
+    let nuevoSaldo = payment.cantidad;
+    if (updateAcc.rows.length === 0) {
+      const uBranchRes = await db.query('SELECT id_sucursales FROM public.t_usuarios WHERE id_usuarios = $1', [payment.id_usuarios]);
+      const uBranch = uBranchRes.rows[0]?.id_sucursales?.[0] || 1;
+      const insAcc = await db.query(
+        'INSERT INTO public.t_cuenta_alumno (id_usuarios, saldo_actual, saldo, id_sucursal) VALUES ($1, $2, 4, $3) RETURNING saldo_actual',
+        [payment.id_usuarios, payment.cantidad, uBranch]
+      );
+      nuevoSaldo = insAcc.rows[0]?.saldo_actual ?? payment.cantidad;
+    } else {
+      nuevoSaldo = updateAcc.rows[0].saldo_actual;
+    }
 
     // Cambiar estado a PAID y setear la fecha de movimiento
     const updateDate = confirmationDate ? new Date(confirmationDate) : new Date();
@@ -2376,12 +2409,21 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
       ['PAID', 'Acreditación por Pago Confirmado', updateDate, id]
     );
 
-    // Notificar a la alumna por push
+    // Notificar a la alumna por push y alerta interna
     try {
+      const pushMsg = nuevoSaldo < payment.cantidad
+        ? `Tu pago de ${payment.cantidad} clases fue confirmado. Se saldó tu clase a cuenta y te quedan ${nuevoSaldo} clases disponibles.`
+        : `Tu pago de ${payment.cantidad} crédito${payment.cantidad === 1 ? '' : 's'} fue confirmado. ¡Ya podés reservar tus clases!`;
+
+      await db.query(
+        'INSERT INTO public.t_notificaciones (id_usuarios, titulo, mensaje, tipo, leido, created_at) VALUES ($1, $2, $3, $4, false, NOW())',
+        [payment.id_usuarios, '✅ Pago confirmado', pushMsg, 'INFO']
+      );
+
       await sendPush(
         payment.id_usuarios,
         '✅ Pago confirmado',
-        `Tu pago de ${payment.cantidad} crédito${payment.cantidad === 1 ? '' : 's'} fue confirmado. ¡Ya podés reservar tus clases!`
+        pushMsg
       );
     } catch (pushErr) {
       console.error('[Push] Error notificando alumna sobre confirmación de pago:', pushErr.message);

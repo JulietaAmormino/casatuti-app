@@ -415,7 +415,7 @@ export default function CreditosTab({
             marginBottom: '16px'
           }}>
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#CC7A42', textTransform: 'uppercase' }}>
-              Clase a cuenta (Período 1 al 10)
+              Clase a cuenta
             </span>
             <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: 0 }}>
               Tenés 1 clase a cuenta reservada (-1 crédito)

@@ -358,18 +358,21 @@ export const AppProvider = ({ children }) => {
     const profile = studentProfiles.find(p => p.studentId === studentId);
     const classData = classes.find(c => c.id === classId);
 
-    if (!profile) throw new Error("La alumna no tiene créditos disponibles para reservar esta clase.");
     if (!classData) throw new Error("No se encontró la clase seleccionada. Intentá de nuevo.");
     if (classData.pausedDates && classData.pausedDates.includes(dateStr)) throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
-    if (profile.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
-    if (profile.classCredits < 0) {
-      throw new Error("La alumna ya utilizó su clase a cuenta y posee saldo negativo (-1). Debe adquirir un pack mensual.");
+    if (profile?.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
+
+    const currentCredits = profile ? profile.classCredits : 0;
+    if (currentCredits < 0) {
+      throw new Error("La alumna ya posee saldo negativo (-1). Debe adquirir su pack mensual.");
     }
 
     // Validar sucursal asignada
     if (student.role === 'ALUMNO' && classData.sucursal && student.sucursal) {
       const userBranches = student.sucursal.split(',').map(s => s.trim().toUpperCase());
-      if (!userBranches.includes(classData.sucursal.toUpperCase())) {
+      const classBranch = classData.sucursal.trim().toUpperCase();
+      const belongs = userBranches.some(b => b === classBranch || classBranch.includes(b) || b.includes(classBranch));
+      if (!belongs) {
         throw new Error(`Solo puedes reservar turnos correspondientes a tu sucursal (${student.sucursal}).`);
       }
     }
@@ -380,20 +383,29 @@ export const AppProvider = ({ children }) => {
       b => b.studentId === studentId && b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
     );
     if (existingBooking) throw new Error("La alumna ya se encuentra inscripta en esta clase.");
-    const activeBookingsForClass = bookings.filter(b => b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED'));
-    if (activeBookingsForClass.length >= classData.capacity) throw new Error("No hay cupo disponible en esta clase.");
 
     // Optimistic
     const optimisticId = `optimistic-${Date.now()}`;
     const optimisticBooking = { id: optimisticId, studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', className: classData.name, classTime: classData.time, classDay: classData.day };
     setBookings(prev => [...prev, optimisticBooking]);
-    setStudentProfiles(prev => prev.map(p =>
-      p.studentId === studentId ? { ...p, classCredits: p.classCredits - 1 } : p
-    ));
+    setStudentProfiles(prev => {
+      const exists = prev.some(p => p.studentId === studentId);
+      if (exists) {
+        return prev.map(p => p.studentId === studentId ? { ...p, classCredits: p.classCredits - 1 } : p);
+      } else {
+        return [...prev, { studentId, classCredits: -1, isBlocked: false, monthlyClayKg: 0 }];
+      }
+    });
 
     try {
       const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', isTeacher: true });
-      mockService.createAlert({ type: 'INFO', message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`, studentId });
+      mockService.createAlert({ 
+        type: 'INFO', 
+        message: currentCredits <= 0 
+          ? `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} a cuenta (-1 crédito). Se saldará al adquirir tu próximo pack.` 
+          : `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`, 
+        studentId 
+      });
       Promise.all([
         mockService.getBookings().then(setBookings),
         mockService.getAlerts().then(setAlerts),
@@ -402,9 +414,13 @@ export const AppProvider = ({ children }) => {
       return newBooking;
     } catch (err) {
       setBookings(prev => prev.filter(b => b.id !== optimisticId));
-      setStudentProfiles(prev => prev.map(p =>
-        p.studentId === studentId ? { ...p, classCredits: p.classCredits + 1 } : p
-      ));
+      setStudentProfiles(prev => {
+        const exists = prev.some(p => p.studentId === studentId);
+        if (exists) {
+          return prev.map(p => p.studentId === studentId ? { ...p, classCredits: p.classCredits + 1 } : p);
+        }
+        return prev;
+      });
       throw err;
     }
   };
