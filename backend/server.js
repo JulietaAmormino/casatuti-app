@@ -1988,6 +1988,30 @@ app.put('/api/insumos/:id/confirm', async (req, res) => {
   }
 });
 
+// Cancelar/Eliminar una deuda de insumo pendiente
+app.put('/api/insumos/:id/cancel', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const debtRes = await db.query('SELECT * FROM public.t_deudas_insumos WHERE id_deudas_insumos = $1', [id]);
+    if (debtRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Deuda de insumo no encontrada.' });
+    }
+
+    const debt = debtRes.rows[0];
+    if (debt.bl_pagado) {
+      return res.status(400).json({ error: 'No se puede cancelar un insumo que ya fue marcado como pagado.' });
+    }
+
+    await db.query('DELETE FROM public.t_deudas_insumos WHERE id_deudas_insumos = $1', [id]);
+
+    res.json({ success: true, message: 'Deuda de insumo cancelada y eliminada.' });
+  } catch (error) {
+    console.error('Error al cancelar deuda de insumo:', error);
+    res.status(500).json({ error: 'Error al cancelar la deuda de insumo.' });
+  }
+});
+
 // Registrar un horneado
 app.post('/api/bakes', async (req, res) => {
   const { studentId, price, description } = req.body;
@@ -2367,6 +2391,52 @@ app.put('/api/payments/:id/confirm', async (req, res) => {
   } catch (error) {
     console.error('Error al confirmar pago:', error);
     res.status(500).json({ error: 'Error al confirmar el pago.' });
+  }
+});
+
+// Cancelar un pago pendiente (por parte del admin)
+app.put('/api/payments/:id/cancel', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const paymentRes = await db.query('SELECT * FROM public.t_historial_creditos WHERE id_historial_credito = $1', [id]);
+    if (paymentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Pago pendiente no encontrado.' });
+    }
+
+    const payment = paymentRes.rows[0];
+    if (payment.estado === 'PAID') {
+      return res.status(400).json({ error: 'No se puede cancelar un pago que ya fue confirmado.' });
+    }
+
+    // Cambiar estado a CANCELLED
+    await db.query(
+      'UPDATE public.t_historial_creditos SET estado = $1, motivo = $2, fec_movimiento = NOW() WHERE id_historial_credito = $3',
+      ['CANCELLED', 'Solicitud de Pago Cancelada', id]
+    );
+
+    // Notificar a la alumna (alerta interna y push)
+    try {
+      if (payment.id_usuarios) {
+        await db.query(
+          `INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at, id_usuarios) 
+           VALUES ($1, $2, $3, false, NOW(), $4)`,
+          ['Solicitud de Pago Cancelada', `Tu solicitud de compra de ${payment.cantidad} clases por $${Number(payment.monto || 0).toLocaleString('es-AR')} fue cancelada por la administración. No se generó deuda.`, 'INFO', payment.id_usuarios]
+        );
+        await sendPush(
+          payment.id_usuarios,
+          'Solicitud de Pago Cancelada',
+          `Tu solicitud de compra de ${payment.cantidad} clases por $${Number(payment.monto || 0).toLocaleString('es-AR')} fue cancelada.`
+        );
+      }
+    } catch (notifErr) {
+      console.warn('[Notif] Error enviando notificación de cancelación:', notifErr.message);
+    }
+
+    res.json({ success: true, message: 'Pago cancelado exitosamente.' });
+  } catch (error) {
+    console.error('Error al cancelar pago:', error);
+    res.status(500).json({ error: 'Error al cancelar el pago.' });
   }
 });
 

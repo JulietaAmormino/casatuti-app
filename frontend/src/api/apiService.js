@@ -387,8 +387,24 @@ export const apiService = {
     return handleResponse(res);
   },
 
+  cancelPayment: async (paymentId) => {
+    const res = await fetch(`${API_URL}/payments/${paymentId}/cancel`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
   confirmInsumoPayment: async (insumoId) => {
     const res = await fetch(`${API_URL}/insumos/${insumoId}/confirm`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
+  cancelInsumoPayment: async (insumoId) => {
+    const res = await fetch(`${API_URL}/insumos/${insumoId}/cancel`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' }
     });

@@ -589,6 +589,33 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const cancelPendingPayment = async (paymentId) => {
+    const prevPayments = payments;
+    setPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'CANCELLED' } : p));
+    try {
+      await mockService.cancelPayment(paymentId);
+      await Promise.all([
+        mockService.getPayments().then(setPayments),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
+    } catch (err) {
+      setPayments(prevPayments);
+      throw err;
+    }
+  };
+
+  const cancelInsumoPayment = async (insumoId) => {
+    const prevBakes = bakes;
+    setBakes(prev => prev.filter(b => b.id !== insumoId));
+    try {
+      await mockService.cancelInsumoPayment(insumoId);
+      mockService.getBakes().then(setBakes);
+    } catch (err) {
+      setBakes(prevBakes);
+      throw err;
+    }
+  };
+
   const sendTransferReminder = async (paymentId) => {
     await mockService.notifyPaymentReminder(paymentId);
   };
@@ -968,7 +995,9 @@ export const AppProvider = ({ children }) => {
         recordStudentPayment,
         grantBulkFreeCreditsAction,
         confirmPendingPayment,
+        cancelPendingPayment,
         confirmInsumoPayment,
+        cancelInsumoPayment,
         sendTransferReminder,
         requestStudentPayment,
         createNewTurn,
