@@ -27,3 +27,4 @@ END $$;
 -- 3. Documentar regla de negocio de asistencia y compras a cuenta
 COMMENT ON CONSTRAINT t_cuenta_alumno_saldo_actual_min_check ON public.t_cuenta_alumno IS 
 'Permite sobregiro de 1 clase (-1 credito) cuando el profesor agrega una alumna sin creditos a la clase o durante el periodo de gracia. Al abonar un nuevo pack, el saldo negativo se compensa automaticamente.';
+
