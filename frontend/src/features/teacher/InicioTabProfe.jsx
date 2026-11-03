@@ -142,6 +142,10 @@ export default function InicioTabProfe({
 
   const handleAddStudentAndMarkPresent = async () => {
     if (!selectedStudentToAdd || !nextClassData) return;
+    const selectedStudent = users.find(u => u.id === Number(selectedStudentToAdd));
+    const studentProf = studentProfiles?.find(p => p.studentId === Number(selectedStudentToAdd));
+    const hasCredits = (studentProf?.classCredits ?? 0) > 0;
+
     try {
       setIsAddingStudent(true);
       // 1. Reservar la clase para la alumna
@@ -156,7 +160,11 @@ export default function InicioTabProfe({
       }
       setSelectedStudentToAdd('');
       setStudentSearchTerm('');
-      alert("Alumno/a agregado/a y marcado/a como presente con éxito.");
+      if (hasCredits) {
+        alert(`Alumno/a ${selectedStudent?.name || ''} agregado/a y marcado/a presente. Se le descontó 1 crédito.`);
+      } else {
+        alert(`Alumno/a ${selectedStudent?.name || ''} agregado/a y marcado/a presente a cuenta (-1 crédito). Se le restará automáticamente cuando abone su pack.`);
+      }
     } catch (error) {
       alert("Error al agregar alumno/a: " + error.message);
     } finally {
@@ -192,7 +200,13 @@ export default function InicioTabProfe({
   };
 
   const handleRemoveStudent = async (booking) => {
-    if (window.confirm(`¿Seguro que querés quitar a ${booking.studentName} de esta clase y devolverle el crédito?`)) {
+    const studentProf = studentProfiles?.find(p => p.studentId === booking.studentId);
+    const isNegative = (studentProf?.classCredits ?? 0) <= 0;
+    const msgConfirm = isNegative 
+      ? `¿Seguro que querés quitar a ${booking.studentName} de esta clase? Se saldará su saldo a cuenta y volverá a 0 créditos.`
+      : `¿Seguro que querés quitar a ${booking.studentName} de esta clase y devolverle el crédito?`;
+
+    if (window.confirm(msgConfirm)) {
       try {
         await cancelBooking(booking.id, false, true); // forceRefund = true
         alert("Alumno/a retirado/a de la clase y crédito devuelto con éxito.");
@@ -515,7 +529,7 @@ export default function InicioTabProfe({
                 </span>
               </div>
               <p style={{ fontSize: '11px', color: 'var(--gris-medio)', margin: 0 }}>
-                Si un/a alumno/a asistió pero no estaba anotado/a, podés buscarlo/a y sumarlo/a acá. (Se le descontará 1 crédito).
+                Si un/a alumno/a asistió pero no estaba anotado/a, podés buscarlo/a y sumarlo/a acá. Si tiene créditos se le descontará 1; si no tiene, pasará a -1 (a cuenta y se le restará cuando abone).
               </p>
 
               {/* Buscador de Alumnos */}
@@ -564,7 +578,7 @@ export default function InicioTabProfe({
                     >
                       <span>{u.name}</span>
                       <span style={{ fontSize: '10px', color: u.credits > 0 ? 'var(--verde-oliva)' : 'var(--marron-arcilla)' }}>
-                        ({u.credits > 0 ? `${u.credits} disp.` : 'a cuenta'})
+                        ({u.credits > 0 ? `${u.credits} disp.` : 'a cuenta (-1)'})
                       </span>
                     </button>
                   ))}
@@ -586,7 +600,7 @@ export default function InicioTabProfe({
                   </option>
                   {filteredStudentsToAdd.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.name} ({u.credits > 0 ? `${u.credits} disp.` : '0 disp. - a cuenta'})
+                      {u.name} ({u.credits > 0 ? `${u.credits} disp.` : '0 disp. - a cuenta (-1)'})
                     </option>
                   ))}
                 </select>

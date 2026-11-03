@@ -123,8 +123,22 @@ export const AppProvider = ({ children }) => {
         if (savedUserId) {
           const savedUser = loadedUsers.find(u => u.id?.toString() === savedUserId.toString());
           if (savedUser) {
-            setCurrentUser(savedUser);
+            const cachedAvatar = localStorage.getItem('tuti_session_user_avatar');
+            setCurrentUser(prev => ({
+              ...savedUser,
+              avatar_url: prev?.avatar_url || cachedAvatar || savedUser.avatar_url || null
+            }));
             setIsAuthenticated(true);
+
+            // Si no tenemos el avatar en cache, obtenerlo para el usuario actual de forma rápida
+            if (!cachedAvatar && !savedUser.avatar_url) {
+              mockService.getUserById(savedUserId).then(fullUser => {
+                if (fullUser && fullUser.avatar_url) {
+                  localStorage.setItem('tuti_session_user_avatar', fullUser.avatar_url);
+                  setCurrentUser(prev => prev && prev.id === fullUser.id ? { ...prev, avatar_url: fullUser.avatar_url } : prev);
+                }
+              }).catch(() => {});
+            }
           }
         }
       }
@@ -177,6 +191,11 @@ export const AppProvider = ({ children }) => {
       setCurrentUser(user);
       setIsAuthenticated(true);
       localStorage.setItem('tuti_session_user_id', user.id);
+      if (user.avatar_url) {
+        localStorage.setItem('tuti_session_user_avatar', user.avatar_url);
+      } else {
+        localStorage.removeItem('tuti_session_user_avatar');
+      }
       return user;
     } finally {
       setLoading(false);
@@ -198,6 +217,7 @@ export const AppProvider = ({ children }) => {
     setCurrentUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('tuti_session_user_id');
+    localStorage.removeItem('tuti_session_user_avatar');
   };
 
   // Cambiar rol de un usuario (para soporte / configurador)
@@ -242,7 +262,11 @@ export const AppProvider = ({ children }) => {
     setLoading(true);
     try {
       const updatedUser = await mockService.switchProfile(currentUser.id);
-      setCurrentUser(updatedUser);
+      const cachedAvatar = localStorage.getItem('tuti_session_user_avatar');
+      setCurrentUser({
+        ...updatedUser,
+        avatar_url: updatedUser.avatar_url || currentUser.avatar_url || cachedAvatar || null
+      });
       await loadData();
     } catch (err) {
       console.error("Error cambiando de perfil", err);
@@ -358,18 +382,21 @@ export const AppProvider = ({ children }) => {
     const profile = studentProfiles.find(p => p.studentId === studentId);
     const classData = classes.find(c => c.id === classId);
 
-    if (!profile) throw new Error("La alumna no tiene créditos disponibles para reservar esta clase.");
     if (!classData) throw new Error("No se encontró la clase seleccionada. Intentá de nuevo.");
     if (classData.pausedDates && classData.pausedDates.includes(dateStr)) throw new Error("Este turno se encuentra pausado para la fecha seleccionada.");
-    if (profile.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
-    if (profile.classCredits < 0) {
-      throw new Error("La alumna ya utilizó su clase a cuenta y posee saldo negativo (-1). Debe adquirir un pack mensual.");
+    if (profile?.isBlocked) throw new Error("La cuenta del alumno está pausada. No puedes realizar reservas.");
+
+    const currentCredits = profile ? profile.classCredits : 0;
+    if (currentCredits < 0) {
+      throw new Error("La alumna ya posee saldo negativo (-1). Debe adquirir su pack mensual.");
     }
 
     // Validar sucursal asignada
     if (student.role === 'ALUMNO' && classData.sucursal && student.sucursal) {
       const userBranches = student.sucursal.split(',').map(s => s.trim().toUpperCase());
-      if (!userBranches.includes(classData.sucursal.toUpperCase())) {
+      const classBranch = classData.sucursal.trim().toUpperCase();
+      const belongs = userBranches.some(b => b === classBranch || classBranch.includes(b) || b.includes(classBranch));
+      if (!belongs) {
         throw new Error(`Solo puedes reservar turnos correspondientes a tu sucursal (${student.sucursal}).`);
       }
     }
@@ -380,20 +407,29 @@ export const AppProvider = ({ children }) => {
       b => b.studentId === studentId && b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED')
     );
     if (existingBooking) throw new Error("La alumna ya se encuentra inscripta en esta clase.");
-    const activeBookingsForClass = bookings.filter(b => b.classId === classId && b.date === dateStr && (b.status === 'CONFIRMED' || b.status === 'ATTENDED'));
-    if (activeBookingsForClass.length >= classData.capacity) throw new Error("No hay cupo disponible en esta clase.");
 
     // Optimistic
     const optimisticId = `optimistic-${Date.now()}`;
     const optimisticBooking = { id: optimisticId, studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', className: classData.name, classTime: classData.time, classDay: classData.day };
     setBookings(prev => [...prev, optimisticBooking]);
-    setStudentProfiles(prev => prev.map(p =>
-      p.studentId === studentId ? { ...p, classCredits: p.classCredits - 1 } : p
-    ));
+    setStudentProfiles(prev => {
+      const exists = prev.some(p => p.studentId === studentId);
+      if (exists) {
+        return prev.map(p => p.studentId === studentId ? { ...p, classCredits: p.classCredits - 1 } : p);
+      } else {
+        return [...prev, { studentId, classCredits: -1, isBlocked: false, monthlyClayKg: 0 }];
+      }
+    });
 
     try {
       const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', isTeacher: true });
-      mockService.createAlert({ type: 'INFO', message: `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`, studentId });
+      mockService.createAlert({ 
+        type: 'INFO', 
+        message: currentCredits <= 0 
+          ? `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} a cuenta (-1 crédito). Se saldará al adquirir tu próximo pack.` 
+          : `Te agregaron a la clase "${classData.name}" del día ${dateStr.split('-').reverse().join('-')} (${classData.time}). Se ha descontado 1 crédito.`, 
+        studentId 
+      });
       Promise.all([
         mockService.getBookings().then(setBookings),
         mockService.getAlerts().then(setAlerts),
@@ -402,9 +438,13 @@ export const AppProvider = ({ children }) => {
       return newBooking;
     } catch (err) {
       setBookings(prev => prev.filter(b => b.id !== optimisticId));
-      setStudentProfiles(prev => prev.map(p =>
-        p.studentId === studentId ? { ...p, classCredits: p.classCredits + 1 } : p
-      ));
+      setStudentProfiles(prev => {
+        const exists = prev.some(p => p.studentId === studentId);
+        if (exists) {
+          return prev.map(p => p.studentId === studentId ? { ...p, classCredits: p.classCredits + 1 } : p);
+        }
+        return prev;
+      });
       throw err;
     }
   };
@@ -589,6 +629,33 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const cancelPendingPayment = async (paymentId) => {
+    const prevPayments = payments;
+    setPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'CANCELLED' } : p));
+    try {
+      await mockService.cancelPayment(paymentId);
+      await Promise.all([
+        mockService.getPayments().then(setPayments),
+        mockService.getStudentProfiles().then(setStudentProfiles),
+      ]);
+    } catch (err) {
+      setPayments(prevPayments);
+      throw err;
+    }
+  };
+
+  const cancelInsumoPayment = async (insumoId) => {
+    const prevBakes = bakes;
+    setBakes(prev => prev.filter(b => b.id !== insumoId));
+    try {
+      await mockService.cancelInsumoPayment(insumoId);
+      mockService.getBakes().then(setBakes);
+    } catch (err) {
+      setBakes(prevBakes);
+      throw err;
+    }
+  };
+
   const sendTransferReminder = async (paymentId) => {
     await mockService.notifyPaymentReminder(paymentId);
   };
@@ -727,12 +794,18 @@ export const AppProvider = ({ children }) => {
 
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
+      if (updatedFields.avatar_url) {
+        localStorage.setItem('tuti_session_user_avatar', updatedFields.avatar_url);
+      }
     }
 
     try {
       const updatedUser = await mockService.updateUser(userId, userData);
-      if (currentUser && currentUser.id === userId && updatedUser?.sucursal) {
+      if (currentUser && currentUser.id === userId) {
         setCurrentUser(prev => ({ ...prev, ...updatedUser }));
+        if (updatedUser?.avatar_url) {
+          localStorage.setItem('tuti_session_user_avatar', updatedUser.avatar_url);
+        }
       }
       Promise.all([
         mockService.getUsers().then(setUsers),
@@ -968,7 +1041,9 @@ export const AppProvider = ({ children }) => {
         recordStudentPayment,
         grantBulkFreeCreditsAction,
         confirmPendingPayment,
+        cancelPendingPayment,
         confirmInsumoPayment,
+        cancelInsumoPayment,
         sendTransferReminder,
         requestStudentPayment,
         createNewTurn,

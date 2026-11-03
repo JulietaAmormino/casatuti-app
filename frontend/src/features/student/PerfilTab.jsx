@@ -49,28 +49,58 @@ export default function PerfilTab() {
 
   const fileInputRef = useRef(null);
 
-  const handleAvatarUpload = (e) => {
+  const compressImage = (file, maxWidth = 250, quality = 0.75) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          // Recortar al centro para obtener un cuadrado perfecto para avatar circular
+          const minDim = Math.min(width, height);
+          const startX = (width - minDim) / 2;
+          const startY = (height - minDim) / 2;
+
+          const canvas = document.createElement('canvas');
+          const targetSize = Math.min(minDim, maxWidth);
+          canvas.width = targetSize;
+          canvas.height = targetSize;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, targetSize, targetSize);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Url = reader.result;
-        setFormData(prev => ({ ...prev, avatar_url: base64Url }));
+      try {
+        setMessage({ type: 'info', text: 'Procesando imagen...' });
+        const compressedBase64 = await compressImage(file, 250, 0.75);
+        setFormData(prev => ({ ...prev, avatar_url: compressedBase64 }));
 
         // Auto-guardar para que se refleje inmediatamente en el avatar superior
-        try {
-          await updateUserAction(currentUser.id, { 
-            ...formData, 
-            sucursal: currentUser?.sucursal || formData.sucursal,
-            avatar_url: base64Url 
-          });
-          setMessage({ type: 'success', text: '¡Foto de perfil actualizada!' });
-          setTimeout(() => setMessage(null), 3000);
-        } catch (err) {
-          setMessage({ type: 'error', text: err.message || 'Error al actualizar la foto.' });
-        }
-      };
-      reader.readAsDataURL(file);
+        await updateUserAction(currentUser.id, { 
+          ...formData, 
+          sucursal: currentUser?.sucursal || formData.sucursal,
+          avatar_url: compressedBase64 
+        });
+        setMessage({ type: 'success', text: '¡Foto de perfil actualizada!' });
+        setTimeout(() => setMessage(null), 3000);
+      } catch (err) {
+        setMessage({ type: 'error', text: err.message || 'Error al actualizar la foto.' });
+      }
     }
   };
 
