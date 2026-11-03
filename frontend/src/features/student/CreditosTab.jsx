@@ -14,6 +14,7 @@ export default function CreditosTab({
   setBuyStep,
   buyLoading,
   onBuy,
+  onCloseModal,
   payments = [],
   bakes = [],
   isModal = false,
@@ -98,7 +99,7 @@ export default function CreditosTab({
   if (isModal) {
     return (
       <div>
-        {buyStep === 1 ? (
+        {buyStep === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {classCredits < 0 && (
               <div style={{
@@ -114,6 +115,28 @@ export default function CreditosTab({
                 ℹ️ Tenés 1 clase a cuenta reservada. Al acreditarse tu pack, se descontará automáticamente esa clase del total.
               </div>
             )}
+
+            {myPendingPayments.length > 0 && (
+              <div style={{
+                backgroundColor: '#FFF7ED',
+                border: '1.5px solid #FFD8A8',
+                borderRadius: '16px',
+                padding: '12px 16px',
+                fontSize: '12px',
+                color: '#C05621',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, fontSize: '13px' }}>
+                  <span>⚠️ Ya tenés un pack pendiente de confirmación</span>
+                </div>
+                <p style={{ margin: 0, lineHeight: 1.4 }}>
+                  Tenés una solicitud de <strong>{myPendingPayments[0].classCreditsAdded} clases (${Number(myPendingPayments[0].amount).toLocaleString('es-AR')})</strong> en espera. Si ya transferiste, no es necesario solicitar otro para no duplicar deudas.
+                </p>
+              </div>
+            )}
+
             <p style={{ fontSize: '13px', color: 'var(--gris-medio)', margin: 0 }}>Elegí tu pack de clases:</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -151,16 +174,123 @@ export default function CreditosTab({
 
             <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
               <button
-                onClick={onBuy}
+                onClick={() => setBuyStep('confirm')}
                 disabled={buyLoading || !selectedPack}
                 className="btn-tuti btn-primary-clay"
                 style={{ flex: 1 }}
               >
-                {buyLoading ? 'Procesando...' : 'Continuar'}
+                Continuar
               </button>
             </div>
           </div>
-        ) : (
+        )}
+
+        {buyStep === 'confirm' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: '0 0 6px 0' }}>
+                ¿Confirmás la solicitud de este pack?
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--gris-medio)', margin: 0 }}>
+                Revisá los datos antes de confirmar para evitar solicitudes duplicadas.
+              </p>
+            </div>
+
+            {/* Resumen del pack elegido */}
+            <div style={{
+              backgroundColor: 'var(--bg-crema)',
+              padding: '16px 20px',
+              borderRadius: '20px',
+              border: '1px solid var(--gris-claro)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', color: 'var(--gris-medio)', fontWeight: 600 }}>Pack seleccionado:</span>
+                <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>{selectedPack?.name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', color: 'var(--gris-medio)', fontWeight: 600 }}>Clases incluidas:</span>
+                <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--verde-oliva)' }}>{selectedPack?.credits} clases</span>
+              </div>
+              <div style={{ height: '1px', backgroundColor: 'var(--gris-claro)', margin: '4px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gris-oscuro)' }}>Total a abonar:</span>
+                <span style={{ fontSize: '22px', fontWeight: 900, color: 'var(--marron-arcilla)' }}>
+                  ${selectedPack?.price.toLocaleString('es-AR')}
+                </span>
+              </div>
+            </div>
+
+            {/* Advertencia si ya tiene un pack pendiente */}
+            {myPendingPayments.length > 0 && (
+              <div style={{
+                backgroundColor: '#FEF2F2',
+                border: '1.5px solid #FCA5A5',
+                borderRadius: '16px',
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ fontWeight: 800, color: '#B91C1C', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⚠️ ¡Atención! Tenés un pago pendiente de confirmación</span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#7F1D1D', margin: 0, lineHeight: 1.4 }}>
+                  Actualmente figura una solicitud de <strong>{myPendingPayments[0].classCreditsAdded} clases por ${Number(myPendingPayments[0].amount).toLocaleString('es-AR')}</strong> ({myPendingPayments[0].date ? formatDateDDMMYYYY(myPendingPayments[0].date) : 'pendiente'}).
+                </p>
+                <p style={{ fontSize: '12px', color: '#991B1B', margin: 0, fontWeight: 700, lineHeight: 1.4 }}>
+                  Si confirmás esta compra, te quedará una deuda adicional por ${selectedPack?.price.toLocaleString('es-AR')}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPayingDebt(myPendingPayments[0]);
+                    if (onCloseModal) onCloseModal();
+                  }}
+                  className="btn-tuti"
+                  style={{
+                    backgroundColor: '#EF4444',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                    fontWeight: 800,
+                    borderRadius: '12px',
+                    alignSelf: 'flex-start',
+                    cursor: 'pointer'
+                  }}
+                >
+                  👉 Pagar o ver datos del pack pendiente anterior
+                </button>
+              </div>
+            )}
+
+            {/* Botones de acción */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              <button
+                onClick={onBuy}
+                disabled={buyLoading || !selectedPack}
+                className="btn-tuti btn-primary-clay"
+                style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: 800 }}
+              >
+                {buyLoading ? 'Registrando solicitud...' : (myPendingPayments.length > 0 ? '✓ Confirmar de todas formas' : '✓ Confirmar solicitud de compra')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBuyStep(1)}
+                disabled={buyLoading}
+                className="btn-tuti btn-secondary"
+                style={{ width: '100%', padding: '10px', fontSize: '13px' }}
+              >
+                Volver a elegir pack
+              </button>
+            </div>
+          </div>
+        )}
+
+        {buyStep === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ backgroundColor: 'var(--bg-crema)', padding: '24px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.02)' }}>
               <p style={{ fontSize: '13px', color: 'var(--gris-medio)', marginBottom: '4px' }}>Total a transferir:</p>
@@ -204,8 +334,14 @@ export default function CreditosTab({
               >
                 Enviar comprobante por WhatsApp
               </a>
-              <button onClick={() => setBuyStep(1)} className="btn-tuti btn-secondary">
-                Volver
+              <button 
+                onClick={() => {
+                  setBuyStep(1);
+                  if (onCloseModal) onCloseModal();
+                }} 
+                className="btn-tuti btn-secondary"
+              >
+                Finalizar
               </button>
             </div>
           </div>
@@ -226,7 +362,7 @@ export default function CreditosTab({
             ${Number(payingDebt.amount || payingDebt.price).toLocaleString('es-AR')}
           </p>
           <p style={{ fontSize: '13px', color: '#CC7A42', marginTop: '8px', fontWeight: 'bold' }}>
-            {payingDebt.creditsAdded ? `Por el Pack de ${payingDebt.creditsAdded} Clases` : `Por ${payingDebt.description}`}
+            {(payingDebt.classCreditsAdded || payingDebt.creditsAdded) ? `Por el Pack de ${payingDebt.classCreditsAdded || payingDebt.creditsAdded} Clases` : `Por ${payingDebt.description}`}
           </p>
         </div>
 
@@ -258,7 +394,7 @@ export default function CreditosTab({
         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <a
             href={`https://wa.me/5493541591817?text=${encodeURIComponent(
-              payingDebt.creditsAdded 
+              (payingDebt.classCreditsAdded || payingDebt.creditsAdded) 
                 ? 'Hola, acabo de realizar la transferencia para pagar mi deuda de clases.' 
                 : `Hola, acabo de realizar la transferencia para pagar mi deuda de insumos (${payingDebt.description}).`
             )}`}
