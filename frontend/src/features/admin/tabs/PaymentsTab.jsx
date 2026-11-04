@@ -59,6 +59,7 @@ export default function PaymentsTab({ showFeedback }) {
 
   const confirmedPayments = payments.filter(p => {
     if (p.status !== 'PAID') return false;
+    if (p.amount <= 0) return false;
     if (selectedBranch === 'ALL') return true;
     const st = baseStudents.find(s => s.id === p.studentId);
     return st && (st.sucursal || '').toUpperCase() === selectedBranch.toUpperCase();
