@@ -1459,8 +1459,20 @@ app.post('/api/bookings', async (req, res) => {
     const classStartDateTime = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-03:00`);
     const diffMs = classStartDateTime.getTime() - new Date().getTime();
 
-    if (!req.body.isTeacher && diffMs < 5 * 60 * 1000) {
+    const isTeacher = req.body.isTeacher === true || req.body.isTeacher === 'true' || req.body.isTeacher === 1 || !!req.body.teacherId;
+
+    if (!isTeacher && diffMs < 5 * 60 * 1000) {
       return res.status(400).json({ error: 'Solo puedes inscribirte hasta 5 minutos antes del inicio de la clase.' });
+    }
+
+    if (isTeacher) {
+      // El profesor puede anotar durante toda la duración de la clase (hasta su hora de fin + 30 min de margen)
+      const endTimeStr = classData.hora_fin ? classData.hora_fin.toString().split(' ')[0] : '23:59';
+      const [endH, endM] = endTimeStr.split(':').map(Number);
+      const classEndDateTime = new Date(`${dateStr}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00-03:00`);
+      if (new Date().getTime() - classEndDateTime.getTime() > 30 * 60 * 1000) {
+        return res.status(400).json({ error: 'Esta clase ya ha finalizado.' });
+      }
     }
 
     // 2. Validar si la cuenta está bloqueada/pausada
@@ -1474,7 +1486,6 @@ app.post('/api/bookings', async (req, res) => {
       day: 'numeric'
     }).format(new Date()), 10);
     const isGracePeriod = currentDay >= 1 && currentDay <= 10;
-    const isTeacher = !!req.body.isTeacher;
 
     if (profile.saldo_actual <= 0) {
       const allowOnAccount = (isGracePeriod && profile.saldo_actual === 0) || (isTeacher && profile.saldo_actual === 0);
@@ -1532,7 +1543,7 @@ app.post('/api/bookings', async (req, res) => {
     );
     const activeBookingsCount = parseInt(countRes.rows[0].count);
 
-    if (!req.body.isTeacher && activeBookingsCount >= classData.cupo_maximo) {
+    if (!isTeacher && activeBookingsCount >= classData.cupo_maximo) {
       return res.status(400).json({ error: 'Esta clase ya no tiene cupos disponibles para la fecha seleccionada.' });
     }
 
@@ -2204,10 +2215,10 @@ app.post('/api/students/bulk-free-credits', async (req, res) => {
     for (const sId of studentIds) {
       const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [sId]);
       
-      // 1. Insertar en t_historial_creditos para registro (monto 0)
+      // 1. Insertar en t_historial_creditos para registro (monto 0, estado FREE para no computarlo como cobro de dinero)
       await db.query(
         `INSERT INTO public.t_historial_creditos (id_usuarios, cantidad, motivo, fec_movimiento, estado, monto)
-         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'PAID', 0)`,
+         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'FREE', 0)`,
         [sId, creditsToAdd, paymentDate]
       );
 
