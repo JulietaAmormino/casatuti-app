@@ -50,7 +50,7 @@ export default function CreditosTab({
 
   const myPayments = payments.filter(p => p.studentId == currentUser?.id);
   const myPendingPayments = myPayments.filter(p => p.status === 'PENDING').sort((a, b) => getDateObj(b.date) - getDateObj(a.date));
-  const myConfirmedPayments = myPayments.filter(p => p.status === 'CONFIRMED' || p.status === 'PAID').sort((a, b) => getDateObj(b.date) - getDateObj(a.date));
+  const myConfirmedPayments = myPayments.filter(p => p.status === 'CONFIRMED' || p.status === 'PAID' || p.status === 'FREE').sort((a, b) => getDateObj(b.date) - getDateObj(a.date));
 
   // -- ALGORITMO PARA MAPEAR SALDO ACTUAL A LOS PACKS COMPRADOS --
   const { classCredits = 0 } = profile || {};

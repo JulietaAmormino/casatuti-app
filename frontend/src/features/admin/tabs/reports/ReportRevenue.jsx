@@ -15,6 +15,7 @@ export default function ReportRevenue() {
     // Asumiendo que status === 'PAID' o 'CONFIRMED' o sin status
     payments.forEach(p => {
       if (p.status === 'PENDING') return; // ignorar pagos pendientes
+      if (p.status === 'FREE' || !p.amount || p.amount <= 0) return; // ignorar bonificaciones o créditos gratis sin cobro
 
       // Obtener nombre del alumno
       const user = users?.find(u => u.id === p.studentId);

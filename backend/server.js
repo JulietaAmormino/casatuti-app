@@ -2204,10 +2204,10 @@ app.post('/api/students/bulk-free-credits', async (req, res) => {
     for (const sId of studentIds) {
       const profileRes = await db.query('SELECT * FROM public.t_cuenta_alumno WHERE id_usuarios = $1', [sId]);
       
-      // 1. Insertar en t_historial_creditos para registro (monto 0)
+      // 1. Insertar en t_historial_creditos para registro (monto 0, estado FREE para no computarlo como cobro de dinero)
       await db.query(
         `INSERT INTO public.t_historial_creditos (id_usuarios, cantidad, motivo, fec_movimiento, estado, monto)
-         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'PAID', 0)`,
+         VALUES ($1, $2, 'Crédito Gratis (Otorgado por Admin)', $3, 'FREE', 0)`,
         [sId, creditsToAdd, paymentDate]
       );
 
