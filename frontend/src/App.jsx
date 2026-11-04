@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from './assets/logo.png';
 import { AppProvider, useApp } from './context/AppContext';
 import AlumnoView from './features/student/AlumnoView';
