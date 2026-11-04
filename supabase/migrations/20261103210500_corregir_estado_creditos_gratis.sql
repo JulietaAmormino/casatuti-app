@@ -4,3 +4,4 @@ UPDATE public.t_historial_creditos
 SET estado = 'FREE'
 WHERE (monto = 0 OR monto IS NULL) 
   AND motivo = 'Crédito Gratis (Otorgado por Admin)';
+
