@@ -58,12 +58,21 @@ export default function InicioTabProfe({
         const classStart = new Date(dateToCheck);
         classStart.setHours(parseInt(hours, 10), parseInt(mins || 0, 10), 0, 0);
 
-        // Si la clase es hoy, mostramos las que están transcurriendo (margen de 2 horas)
-        // o las que están por venir.
-        const classEnd = new Date(classStart);
-        classEnd.setHours(classEnd.getHours() + 2);
+        const endStr = c.time.split(' - ')[1] || '';
+        let classEnd = new Date(classStart);
+        if (endStr && endStr.includes(':')) {
+          const [endH, endM] = endStr.split(':');
+          classEnd.setHours(parseInt(endH, 10), parseInt(endM || 0, 10), 0, 0);
+        } else {
+          classEnd.setHours(classEnd.getHours() + 2);
+        }
 
-        if (classEnd > now) {
+        // Mostramos las clases que están transcurriendo durante toda su duración
+        // y hasta 30 minutos después de terminar para permitir asentar asistencias.
+        const classVisibleEnd = new Date(classEnd);
+        classVisibleEnd.setMinutes(classVisibleEnd.getMinutes() + 30);
+
+        if (classVisibleEnd > now) {
           const dateStr = `${dateToCheck.getFullYear()}-${String(dateToCheck.getMonth() + 1).padStart(2, '0')}-${String(dateToCheck.getDate()).padStart(2, '0')}`;
           candidates.push({
             classId: c.id,

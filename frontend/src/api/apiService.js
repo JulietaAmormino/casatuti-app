@@ -259,7 +259,8 @@ export const apiService = {
         studentName: bookingData.studentName,
         classId: bookingData.classId,
         date: bookingData.date,
-        isTeacher: !!bookingData.isTeacher
+        isTeacher: !!bookingData.isTeacher,
+        teacherId: bookingData.teacherId || null
       })
     });
     return handleResponse(res);
