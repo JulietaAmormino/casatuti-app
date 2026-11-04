@@ -422,7 +422,15 @@ export const AppProvider = ({ children }) => {
     });
 
     try {
-      const newBooking = await mockService.createBooking({ studentId, studentName, classId, date: dateStr, status: 'CONFIRMED', isTeacher: true });
+      const newBooking = await mockService.createBooking({ 
+        studentId, 
+        studentName, 
+        classId, 
+        date: dateStr, 
+        status: 'CONFIRMED', 
+        isTeacher: true,
+        teacherId: currentUser?.id
+      });
       mockService.createAlert({ 
         type: 'INFO', 
         message: currentCredits <= 0 
