@@ -2064,7 +2064,7 @@ app.put('/api/insumos/:id/cancel', async (req, res) => {
 
 // Registrar un horneado
 app.post('/api/bakes', async (req, res) => {
-  const { studentId, price, description } = req.body;
+  const { studentId, price, description, paymentMethod } = req.body;
 
   if (!studentId || price === undefined || !description) {
     return res.status(400).json({ error: 'Faltan parámetros de horneado requeridos.' });
@@ -2081,8 +2081,8 @@ app.post('/api/bakes', async (req, res) => {
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, precio_total, metodo_pago_pte, bl_pagado, fec_carga)
       VALUES 
-        ($1, 'HORNO', $2, $3, NULL, false, NOW())`,
-      [studentId, description, finalPrice]
+        ($1, 'HORNO', $2, $3, $4, false, NOW())`,
+      [studentId, description, finalPrice, paymentMethod || null]
     );
 
     res.status(201).json({ success: true });
@@ -2094,7 +2094,7 @@ app.post('/api/bakes', async (req, res) => {
 
 // Registrar arcilla extra
 app.post('/api/extra-clay', async (req, res) => {
-  const { studentId, quantity } = req.body;
+  const { studentId, quantity, paymentMethod } = req.body;
 
   if (!studentId || !quantity) {
     return res.status(400).json({ error: 'Faltan parámetros de arcilla requeridos.' });
@@ -2107,13 +2107,21 @@ app.post('/api/extra-clay', async (req, res) => {
       precio = parseFloat(extraRes.rows[0].precio);
     }
 
-    const descripcion = `Arcilla extra: ${quantity}`;
+    let descripcion = `Arcilla extra: ${quantity}`;
+    if (paymentMethod === 'CONTADO') {
+      descripcion += ' (Pagado en Efectivo)';
+    } else if (paymentMethod === 'TRANSF') {
+      descripcion += ' (Pagado por Transferencia)';
+    } else if (paymentMethod === 'COMBINADO') {
+      descripcion += ' (Pago Combinado)';
+    }
+
     await db.query(
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, precio_total, metodo_pago_pte, bl_pagado, fec_carga)
       VALUES 
-        ($1, 'ARCILLA', $2, $3, NULL, false, NOW())`,
-      [studentId, descripcion, precio]
+        ($1, 'ARCILLA', $2, $3, $4, false, NOW())`,
+      [studentId, descripcion, precio, paymentMethod || null]
     );
 
     res.status(201).json({ success: true });

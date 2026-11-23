@@ -335,7 +335,8 @@ export const apiService = {
       body: JSON.stringify({
         studentId: bakeData.studentId,
         price: bakeData.price,
-        description: bakeData.description
+        description: bakeData.description,
+        paymentMethod: bakeData.paymentMethod
       })
     });
     return handleResponse(res);
@@ -347,7 +348,8 @@ export const apiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         studentId: clayData.studentId,
-        quantity: clayData.quantity
+        quantity: clayData.quantity,
+        paymentMethod: clayData.paymentMethod
       })
     });
     return handleResponse(res);

@@ -37,7 +37,7 @@ export default function PaymentsTab({ showFeedback }) {
     if (selectedBranch === 'ALL') return true;
     const st = baseStudents.find(s => s.id === p.studentId);
     return st && (st.sucursal || '').toUpperCase() === selectedBranch.toUpperCase();
-  }).map(p => ({ ...p, isInsumo: false }));
+  }).map(p => ({ ...p, isInsumo: false, description: p.description || p.motivo, paymentMethod: p.paymentMethod || 'TRANSF' }));
 
   const pendingBakes = (bakes || []).filter(b => {
     if (b.isPaid || b.price <= 0) return false;
@@ -50,6 +50,8 @@ export default function PaymentsTab({ showFeedback }) {
     amount: b.price,
     date: b.date,
     motivo: b.description || 'Deuda de insumo',
+    description: b.description || 'Insumo',
+    paymentMethod: b.paymentMethod,
     status: 'PENDING',
     isInsumo: true,
     insumoType: b.type
@@ -63,7 +65,7 @@ export default function PaymentsTab({ showFeedback }) {
     if (selectedBranch === 'ALL') return true;
     const st = baseStudents.find(s => s.id === p.studentId);
     return st && (st.sucursal || '').toUpperCase() === selectedBranch.toUpperCase();
-  }).map(p => ({ ...p, isInsumo: false }));
+  }).map(p => ({ ...p, isInsumo: false, description: p.description || p.motivo, paymentMethod: p.paymentMethod || 'TRANSF' }));
 
   const confirmedBakes = (bakes || []).filter(b => {
     if (!b.isPaid) return false;
@@ -76,6 +78,8 @@ export default function PaymentsTab({ showFeedback }) {
     amount: b.price,
     date: b.date, // Ideally this would be fec_pago but we don't have it, so fallback to fec_carga (b.date)
     motivo: b.description || 'Pago de insumo',
+    description: b.description || 'Insumo',
+    paymentMethod: b.paymentMethod,
     status: 'PAID',
     isInsumo: true,
     insumoType: b.type
@@ -96,6 +100,80 @@ export default function PaymentsTab({ showFeedback }) {
   };
 
   const displayedPendingPayments = allPendingPayments.filter(matchesStudentSearch);
+
+  // Helper para extraer descripción limpia y método de pago informado por el profesor
+  const getPaymentDetails = (p) => {
+    const rawDesc = (p.description || p.motivo || '').trim();
+    let method = 'Transferencia';
+    let methodType = 'TRANSF';
+    let cleanDesc = rawDesc;
+
+    if (p.isInsumo) {
+      const lower = rawDesc.toLowerCase();
+      if (lower.includes('efectivo') || p.paymentMethod === 'CONTADO' || p.paymentMethod === 'EFECTIVO') {
+        method = 'Efectivo';
+        methodType = 'CONTADO';
+      } else if (lower.includes('transferencia') || p.paymentMethod === 'TRANSF') {
+        method = 'Transferencia';
+        methodType = 'TRANSF';
+      } else if (lower.includes('combinado') || p.paymentMethod === 'COMBINADO') {
+        const match = rawDesc.match(/\((Pago Combinado[^)]*)\)/i);
+        method = match ? match[1] : 'Combinado (Efvo + Transf)';
+        methodType = 'COMBINADO';
+      } else if (lower.includes('pendiente') || p.paymentMethod === 'PENDIENTE') {
+        method = 'A pagar (Pendiente)';
+        methodType = 'PENDIENTE';
+      } else {
+        method = 'A pagar (Pendiente)';
+        methodType = 'PENDIENTE';
+      }
+
+      // Limpiar sufijo del método de pago de la descripción para que quede la pieza limpia
+      cleanDesc = rawDesc
+        .replace(/\s*\((Pagado en Efectivo|Pagado por Transferencia|Pago Combinado[^)]*)\)\s*/gi, '')
+        .trim();
+    } else {
+      cleanDesc = p.classCreditsAdded ? `Pack de ${p.classCreditsAdded} clases` : (rawDesc || 'Pack de clases');
+      method = 'Transferencia';
+      methodType = 'TRANSF';
+    }
+
+    return { method, methodType, cleanDesc };
+  };
+
+  const getMethodBadgeStyle = (methodType) => {
+    switch (methodType) {
+      case 'CONTADO':
+        return {
+          backgroundColor: '#E8F5E9',
+          color: '#2E7D32',
+          border: '1px solid #C8E6C9',
+          label: '💵 Efectivo'
+        };
+      case 'TRANSF':
+        return {
+          backgroundColor: '#E3F2FD',
+          color: '#1565C0',
+          border: '1px solid #BBDEFB',
+          label: '📲 Transferencia'
+        };
+      case 'COMBINADO':
+        return {
+          backgroundColor: '#FFF3E0',
+          color: '#E65100',
+          border: '1px solid #FFE0B2',
+          label: '🔀 Combinado'
+        };
+      case 'PENDIENTE':
+      default:
+        return {
+          backgroundColor: '#FFF8E1',
+          color: '#B78103',
+          border: '1px solid #FFECB3',
+          label: '⏳ A pagar'
+        };
+    }
+  };
 
   // Filtro de Meses para Pagos Confirmados
   const [selectedMonths, setSelectedMonths] = useState([]);
@@ -456,6 +534,8 @@ export default function PaymentsTab({ showFeedback }) {
               {displayedPendingPayments.map(p => {
                 const st = baseStudents.find(u => u.id === p.studentId);
                 const isSelected = selectedPayments.includes(p.id);
+                const details = getPaymentDetails(p);
+                const badgeStyle = getMethodBadgeStyle(details.methodType);
                 return (
                   <div
                     key={p.id}
@@ -481,8 +561,8 @@ export default function PaymentsTab({ showFeedback }) {
                       />
 
                       <div style={{ flex: 1 }}>
-                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>{st?.name || 'Alumno'}</h4>
-                        <p style={{ fontSize: '12px', color: 'var(--gris-medio)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--gris-oscuro)', margin: 0 }}>{st?.name || 'Alumno'}</h4>
+                        <div style={{ fontSize: '12px', color: 'var(--gris-medio)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                           {p.isInsumo ? (
                             <span style={{ fontSize: '10px', fontWeight: 700, backgroundColor: 'var(--marron-arcilla)', color: '#fff', padding: '2px 6px', borderRadius: '12px', textTransform: 'uppercase' }}>
                               {p.insumoType === 'HORNO' ? 'HORNEADO' : 'ARCILLA'}
@@ -491,8 +571,28 @@ export default function PaymentsTab({ showFeedback }) {
                             <strong style={{ color: 'var(--naranja-tierra)' }}>{`${p.classCreditsAdded} clases`}</strong>
                           )}
                           <span>• <strong>${p.amount.toLocaleString('es-AR')}</strong></span>
-                        </p>
-                        <p style={{ fontSize: '10px', color: 'var(--gris-medio)', marginTop: '2px' }}>{formatDateDDMMYYYY(p.date.split(' ')[0])}</p>
+                          <span>• <span style={{ fontSize: '11px', color: 'var(--gris-medio)' }}>{formatDateDDMMYYYY(p.date.split(' ')[0])}</span></span>
+                        </div>
+
+                        {/* Descripción de la pieza / insumo y Método de pago informado */}
+                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          {details.cleanDesc && (
+                            <span style={{ fontSize: '12px', color: 'var(--gris-oscuro)', fontWeight: 600 }}>
+                              {details.cleanDesc}
+                            </span>
+                          )}
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '8px',
+                            backgroundColor: badgeStyle.backgroundColor,
+                            color: badgeStyle.color,
+                            border: badgeStyle.border
+                          }}>
+                            {badgeStyle.label}
+                          </span>
+                        </div>
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} onClick={e => e.stopPropagation()}>
@@ -803,12 +903,14 @@ export default function PaymentsTab({ showFeedback }) {
                     </h5>
                     {grouped[month].map(p => {
                       const st = baseStudents.find(u => u.id === p.studentId);
+                      const details = getPaymentDetails(p);
+                      const badgeStyle = getMethodBadgeStyle(details.methodType);
                       return (
                         <div key={p.id} className="stat-card-modern animate-slide-up" style={{ padding: '16px 20px', borderRadius: '20px', backgroundColor: 'var(--bg-crema-claro)', border: 'none', boxShadow: 'none' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                               <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gris-oscuro)', margin: 0 }}>{st?.name || 'Alumno'}</h4>
-                              <p style={{ fontSize: '11px', color: 'var(--gris-medio)', marginTop: '2px', marginBottom: 0 }}>
+                              <div style={{ fontSize: '11px', color: 'var(--gris-medio)', marginTop: '4px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 {p.isInsumo ? (
                                   <span style={{ fontSize: '10px', fontWeight: 700, backgroundColor: 'var(--marron-arcilla)', color: '#fff', padding: '2px 6px', borderRadius: '12px', textTransform: 'uppercase' }}>
                                     {p.insumoType === 'HORNO' ? 'HORNEADO' : 'ARCILLA'}
@@ -816,7 +918,23 @@ export default function PaymentsTab({ showFeedback }) {
                                 ) : (
                                   `${formatDateDDMMYYYY(p.date.split(' ')[0])} • +${p.classCreditsAdded} clases`
                                 )}
-                              </p>
+                                {details.cleanDesc && (
+                                  <span style={{ color: 'var(--gris-oscuro)', fontWeight: 600 }}>
+                                    • {details.cleanDesc}
+                                  </span>
+                                )}
+                                <span style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '6px',
+                                  backgroundColor: badgeStyle.backgroundColor,
+                                  color: badgeStyle.color,
+                                  border: badgeStyle.border
+                                }}>
+                                  {badgeStyle.label}
+                                </span>
+                              </div>
                             </div>
                             <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gris-oscuro)' }}>
                               ${p.amount.toLocaleString('es-AR')}
