@@ -418,9 +418,11 @@ export const apiService = {
     return handleResponse(res);
   },
 
-  notifyPaymentReminder: async (paymentId) => {
+  notifyPaymentReminder: async (paymentId, isInsumo = false) => {
     const res = await fetch(`${API_URL}/payments/${paymentId}/notify`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isInsumo })
     });
     return handleResponse(res);
   },

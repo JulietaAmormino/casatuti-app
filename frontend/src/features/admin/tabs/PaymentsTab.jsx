@@ -228,21 +228,26 @@ export default function PaymentsTab({ showFeedback }) {
       showFeedback('Por favor, seleccioná al menos un pago para notificar.', 'danger');
       return;
     }
-    if (!window.confirm(`¿Estás seguro de enviar ${selectedPayments.length} recordatorios?`)) return;
+    if (!window.confirm(`¿Estás seguro de enviar ${selectedPayments.length} recordatorios por correo?`)) return;
     setIsProcessingBulk(true);
     let successCount = 0;
+    let failedCount = 0;
     for (const id of selectedPayments) {
       try {
-        await sendTransferReminder(id);
+        const isBake = pendingBakes.some(b => b.id === id);
+        await sendTransferReminder(id, isBake);
         successCount++;
       } catch (e) {
         console.error(`Error notificando pago ${id}:`, e);
+        failedCount++;
       }
     }
     setIsProcessingBulk(false);
     setSelectedPayments([]);
     if (successCount > 0) {
-      showFeedback(`Se enviaron ${successCount} notificaciones con éxito.`, 'info');
+      showFeedback(`Se enviaron ${successCount} correos de recordatorio con éxito.${failedCount > 0 ? ` (${failedCount} con error)` : ''}`, 'info');
+    } else if (failedCount > 0) {
+      showFeedback('No se pudieron enviar los recordatorios seleccionados.', 'danger');
     }
   };
 
@@ -422,15 +427,15 @@ export default function PaymentsTab({ showFeedback }) {
                           <button
                             onClick={async () => {
                               try {
-                                await sendTransferReminder(p.id);
-                                showFeedback(`Recordatorio enviado a ${st?.name}.`, 'info');
+                                const res = await sendTransferReminder(p.id, p.isInsumo);
+                                showFeedback(res?.message || `Recordatorio enviado a ${st?.name || 'la alumna'} por correo.`, 'info');
                               } catch (err) {
-                                showFeedback(err.message, 'danger');
+                                showFeedback(err.message || 'Error al enviar recordatorio.', 'danger');
                               }
                             }}
                             className="btn-tuti btn-secondary"
                             style={{ fontSize: '11px', padding: '6px 8px', backgroundColor: 'var(--blanco)', display: 'flex', alignItems: 'center', gap: '2px', flex: 1, justifyContent: 'center' }}
-                            title="Enviar recordatorio de transferencia"
+                            title="Enviar recordatorio de deuda por correo"
                           >
                             <NotificationsActiveIcon style={{ fontSize: '13px' }} /> Notificar
                           </button>

@@ -664,8 +664,8 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const sendTransferReminder = async (paymentId) => {
-    await mockService.notifyPaymentReminder(paymentId);
+  const sendTransferReminder = async (paymentId, isInsumo = false) => {
+    return await mockService.notifyPaymentReminder(paymentId, isInsumo);
   };
 
   const requestStudentPayment = async (studentId, amount, creditsToAdd) => {
