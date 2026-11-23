@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import webPush from 'web-push';
 
 import db from './db.js';
-import { sendRecoveryEmail, sendWelcomeEmail } from './email.js';
+import { sendRecoveryEmail, sendWelcomeEmail, sendDebtReminderEmail } from './email.js';
 
 dotenv.config();
 
@@ -2064,7 +2064,7 @@ app.put('/api/insumos/:id/cancel', async (req, res) => {
 
 // Registrar un horneado
 app.post('/api/bakes', async (req, res) => {
-  const { studentId, price, description } = req.body;
+  const { studentId, price, description, paymentMethod } = req.body;
 
   if (!studentId || price === undefined || !description) {
     return res.status(400).json({ error: 'Faltan parámetros de horneado requeridos.' });
@@ -2081,8 +2081,8 @@ app.post('/api/bakes', async (req, res) => {
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, precio_total, metodo_pago_pte, bl_pagado, fec_carga)
       VALUES 
-        ($1, 'HORNO', $2, $3, NULL, false, NOW())`,
-      [studentId, description, finalPrice]
+        ($1, 'HORNO', $2, $3, $4, false, NOW())`,
+      [studentId, description, finalPrice, paymentMethod || null]
     );
 
     res.status(201).json({ success: true });
@@ -2094,7 +2094,7 @@ app.post('/api/bakes', async (req, res) => {
 
 // Registrar arcilla extra
 app.post('/api/extra-clay', async (req, res) => {
-  const { studentId, quantity } = req.body;
+  const { studentId, quantity, paymentMethod } = req.body;
 
   if (!studentId || !quantity) {
     return res.status(400).json({ error: 'Faltan parámetros de arcilla requeridos.' });
@@ -2107,13 +2107,21 @@ app.post('/api/extra-clay', async (req, res) => {
       precio = parseFloat(extraRes.rows[0].precio);
     }
 
-    const descripcion = `Arcilla extra: ${quantity}`;
+    let descripcion = `Arcilla extra: ${quantity}`;
+    if (paymentMethod === 'CONTADO') {
+      descripcion += ' (Pagado en Efectivo)';
+    } else if (paymentMethod === 'TRANSF') {
+      descripcion += ' (Pagado por Transferencia)';
+    } else if (paymentMethod === 'COMBINADO') {
+      descripcion += ' (Pago Combinado)';
+    }
+
     await db.query(
       `INSERT INTO public.t_deudas_insumos 
         (id_usuarios, tipo, descripcion, precio_total, metodo_pago_pte, bl_pagado, fec_carga)
       VALUES 
-        ($1, 'ARCILLA', $2, $3, NULL, false, NOW())`,
-      [studentId, descripcion, precio]
+        ($1, 'ARCILLA', $2, $3, $4, false, NOW())`,
+      [studentId, descripcion, precio, paymentMethod || null]
     );
 
     res.status(201).json({ success: true });
@@ -2520,34 +2528,140 @@ app.put('/api/payments/:id/cancel', async (req, res) => {
   }
 });
 
-// Notificar a alumna sobre pago pendiente
-app.post('/api/payments/:id/notify', async (req, res) => {
-  const { id } = req.params;
-
+// Función auxiliar para procesar y enviar recordatorio de deuda por email e in-app
+async function handleNotifyDebt(id, isBakeOrInsumo, res) {
   try {
-    const paymentRes = await db.query('SELECT * FROM public.t_historial_creditos WHERE id_historial_credito = $1', [id]);
-    if (paymentRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Pago pendiente no encontrado.' });
+    let row = null;
+    let isDebtInsumo = !!isBakeOrInsumo;
+
+    if (isDebtInsumo) {
+      const bakeRes = await db.query(`
+        SELECT 
+          d.id_deudas_insumos AS id,
+          d.id_usuarios,
+          d.precio_total AS amount,
+          d.descripcion,
+          d.tipo,
+          d.bl_pagado,
+          u.nombre,
+          u.apellido,
+          u.email,
+          u.genero,
+          (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal
+        FROM public.t_deudas_insumos d
+        JOIN public.t_usuarios u ON d.id_usuarios = u.id_usuarios
+        WHERE d.id_deudas_insumos = $1
+      `, [id]);
+      if (bakeRes.rows.length > 0) {
+        row = bakeRes.rows[0];
+      }
     }
 
-    const payment = paymentRes.rows[0];
+    if (!row) {
+      const creditRes = await db.query(`
+        SELECT 
+          hc.id_historial_credito AS id,
+          hc.id_usuarios,
+          hc.monto AS amount,
+          hc.cantidad,
+          hc.motivo,
+          hc.estado,
+          u.nombre,
+          u.apellido,
+          u.email,
+          u.genero,
+          (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal
+        FROM public.t_historial_creditos hc
+        JOIN public.t_usuarios u ON hc.id_usuarios = u.id_usuarios
+        WHERE hc.id_historial_credito = $1
+      `, [id]);
+      if (creditRes.rows.length > 0) {
+        row = creditRes.rows[0];
+        isDebtInsumo = false;
+      }
+    }
 
-    // Enviar notificación (se usa id_usuario en t_notificaciones si existiera la columna, 
-    // pero si las alertas son genéricas por ahora le mandamos el mensaje).
-    // Nota: Como no tenemos una columna 'id_usuario' segura en t_notificaciones según el esquema anterior,
-    // usaremos la estructura existente e incluiremos el nombre de la alumna en el mensaje si es necesario.
-    // Revisando `POST /api/alerts`, se insertan en `t_notificaciones` con `tipo`, `mensaje`, `fecha_notificacion`.
-    await db.query(
-      `INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at, id_usuarios) 
-       VALUES ($1, $2, $3, false, NOW(), $4)`,
-      ['Recordatorio de Pago', `Recordatorio: Tienes una transferencia pendiente por la compra de ${payment.cantidad} créditos.`, 'TRANSFER_REMINDER', payment.id_usuarios]
-    );
+    if (!row && !isDebtInsumo) {
+      const fallbackBakeRes = await db.query(`
+        SELECT 
+          d.id_deudas_insumos AS id,
+          d.id_usuarios,
+          d.precio_total AS amount,
+          d.descripcion,
+          d.tipo,
+          d.bl_pagado,
+          u.nombre,
+          u.apellido,
+          u.email,
+          u.genero,
+          (SELECT COALESCE(string_agg(s.n_sucursal, ', '), 'CENTRO') FROM unnest(u.id_sucursales) sid LEFT JOIN public.t_sucursales s ON s.id_sucursal = sid) AS sucursal
+        FROM public.t_deudas_insumos d
+        JOIN public.t_usuarios u ON d.id_usuarios = u.id_usuarios
+        WHERE d.id_deudas_insumos = $1
+      `, [id]);
+      if (fallbackBakeRes.rows.length > 0) {
+        row = fallbackBakeRes.rows[0];
+        isDebtInsumo = true;
+      }
+    }
 
-    res.json({ success: true });
+    if (!row) {
+      return res.status(404).json({ error: 'Deuda o pago pendiente no encontrado.' });
+    }
+
+    const studentName = `${row.nombre || ''} ${row.apellido || ''}`.trim() || 'Alumna';
+    if (!row.email || !row.email.includes('@')) {
+      return res.status(400).json({ error: `La alumna ${studentName} no tiene un correo electrónico válido registrado.` });
+    }
+
+    const amount = parseFloat(row.amount || 0);
+    let concept = '';
+    if (isDebtInsumo) {
+      concept = row.tipo ? `Insumo (${row.tipo})` : (row.descripcion || 'Insumo / Materiales');
+    } else {
+      const qty = row.cantidad || 1;
+      concept = `Pack de clases (${qty} ${qty === 1 ? 'clase' : 'clases'})`;
+    }
+
+    // 1. Enviar correo electrónico a la alumna
+    await sendDebtReminderEmail({
+      to: row.email,
+      name: studentName,
+      amount,
+      concept,
+      branch: row.sucursal || 'CENTRO',
+      genero: row.genero || 'F'
+    });
+
+    // 2. Registrar notificación interna en la app
+    try {
+      await db.query(
+        `INSERT INTO public.t_notificaciones (titulo, mensaje, tipo, leido, created_at, id_usuarios) 
+         VALUES ($1, $2, $3, false, NOW(), $4)`,
+        ['Recordatorio de Pago', `Recordatorio: Tienes una transferencia pendiente de $${amount.toLocaleString('es-AR')} por ${concept}.`, 'TRANSFER_REMINDER', row.id_usuarios]
+      );
+    } catch (notifErr) {
+      console.warn('Error al registrar notificación en DB:', notifErr.message);
+    }
+
+    res.json({ success: true, message: `Recordatorio enviado a ${row.email}` });
   } catch (error) {
-    console.error('Error al notificar pago:', error);
-    res.status(500).json({ error: 'Error al notificar el pago.' });
+    console.error('Error al notificar deuda:', error);
+    res.status(500).json({ error: error.message || 'Error al notificar el pago.' });
   }
+}
+
+// Notificar a alumna sobre pago de créditos pendiente
+app.post('/api/payments/:id/notify', async (req, res) => {
+  const { id } = req.params;
+  const isInsumo = req.body?.isInsumo === true || req.body?.isBake === true || req.query?.isInsumo === 'true';
+  await handleNotifyDebt(id, isInsumo, res);
+});
+
+// Notificar a alumna sobre deuda de insumos pendiente
+app.post('/api/insumos/:id/notify', async (req, res) => {
+  const { id } = req.params;
+  await handleNotifyDebt(id, true, res);
 });
 
 // Eliminar día no laboral

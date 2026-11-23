@@ -30,7 +30,7 @@ export default function InicioTabProfe({
 
   const [studentActionMenu, setStudentActionMenu] = useState(null);
   const [bakeModal, setBakeModal] = useState({ isOpen: false, studentId: null, studentName: null, description: '', price: '', paymentMethod: 'PENDIENTE', amountCash: '', amountTransfer: '' });
-  const [clayModal, setClayModal] = useState({ isOpen: false, studentId: null, studentName: null, quantity: '' });
+  const [clayModal, setClayModal] = useState({ isOpen: false, studentId: null, studentName: null, quantity: '', paymentMethod: 'PENDIENTE' });
 
   // Filtrar las clases asignadas a este profesor
   const myClasses = classes.filter(c => (c.teacherIds && c.teacherIds.includes(currentUser.id)) || c.teacherId === currentUser.id);
@@ -256,10 +256,11 @@ export default function InicioTabProfe({
     try {
       await createExtraClay({
         studentId: clayModal.studentId,
-        quantity: clayModal.quantity
+        quantity: clayModal.quantity,
+        paymentMethod: clayModal.paymentMethod
       });
-      alert(`Arcilla extra registrada con éxito para ${clayModal.studentName}. (Pendiente de cobro)`);
-      setClayModal({ isOpen: false, studentId: null, studentName: null, quantity: '' });
+      alert(`Arcilla extra registrada con éxito para ${clayModal.studentName}.`);
+      setClayModal({ isOpen: false, studentId: null, studentName: null, quantity: '', paymentMethod: 'PENDIENTE' });
     } catch (err) {
       alert("Error al registrar arcilla extra: " + err.message);
     }
@@ -884,12 +885,25 @@ export default function InicioTabProfe({
             <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gris-oscuro)', marginBottom: '8px' }}>Vender arcilla extra</h3>
             <p style={{ fontSize: '13px', color: 'var(--gris-medio)', marginBottom: '16px' }}>Alumno/a: <strong>{clayModal.studentName}</strong></p>
             <form onSubmit={handleRegisterClay}>
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--gris-medio)', marginBottom: '6px' }}>Cantidad (kg) *</label>
                 <input type="number" step="0.1" className="input-tuti" required value={clayModal.quantity} onChange={e => setClayModal({...clayModal, quantity: e.target.value})} placeholder="Ej: 1 o 0.5" />
                 <p style={{ fontSize: '11px', color: 'var(--gris-medio)', marginTop: '6px' }}>
                   Se registrará automáticamente como deuda pendiente según el precio por kg actual.
                 </p>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--gris-medio)', marginBottom: '6px' }}>¿Cómo abonó?</label>
+                <select 
+                  className="input-tuti"
+                  value={clayModal.paymentMethod || 'PENDIENTE'}
+                  onChange={e => setClayModal({...clayModal, paymentMethod: e.target.value})}
+                >
+                  <option value="PENDIENTE">A pagar (queda pendiente)</option>
+                  <option value="CONTADO">Efectivo</option>
+                  <option value="TRANSF">Transferencia</option>
+                </select>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button type="button" onClick={() => setClayModal({ isOpen: false })} className="btn-tuti btn-secondary" style={{ flex: 1 }}>Cancelar</button>

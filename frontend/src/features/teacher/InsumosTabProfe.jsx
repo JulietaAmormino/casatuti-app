@@ -62,7 +62,7 @@ export default function InsumosTabProfe({
     paymentMethod: 'PENDIENTE', amountCash: '', amountTransfer: '' 
   });
   // Modal de Arcilla
-  const [clayModal, setClayModal] = useState({ isOpen: false, studentId: null, studentName: null, quantity: '' });
+  const [clayModal, setClayModal] = useState({ isOpen: false, studentId: null, studentName: null, quantity: '', paymentMethod: 'PENDIENTE' });
 
   // Derivar opciones de clases (próximos 15 días)
   const availableClasses = useMemo(() => {
@@ -134,10 +134,11 @@ export default function InsumosTabProfe({
     try {
       await createExtraClay({
         studentId: clayModal.studentId,
-        quantity: clayModal.quantity
+        quantity: clayModal.quantity,
+        paymentMethod: clayModal.paymentMethod
       });
-      alert(`Arcilla extra registrada con éxito para ${clayModal.studentName}. (Pendiente de cobro)`);
-      setClayModal({ isOpen: false, studentId: null, studentName: null, quantity: '' });
+      alert(`Arcilla extra registrada con éxito para ${clayModal.studentName}.`);
+      setClayModal({ isOpen: false, studentId: null, studentName: null, quantity: '', paymentMethod: 'PENDIENTE' });
     } catch (err) {
       alert("Error al registrar arcilla extra: " + err.message);
     }
@@ -334,7 +335,7 @@ export default function InsumosTabProfe({
               Alumna: <strong>{clayModal.studentName}</strong>
             </p>
             <form onSubmit={handleRegisterClay}>
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <label className="label-tuti">Cantidad (Ej: 2kg)</label>
                 <input 
                   type="text" 
@@ -344,6 +345,18 @@ export default function InsumosTabProfe({
                   onChange={e => setClayModal({...clayModal, quantity: e.target.value})}
                   placeholder="Ej: 1kg"
                 />
+              </div>
+              <div style={{ marginBottom: '24px' }}>
+                <label className="label-tuti">¿Cómo abonó?</label>
+                <select 
+                  className="input-tuti"
+                  value={clayModal.paymentMethod || 'PENDIENTE'}
+                  onChange={e => setClayModal({...clayModal, paymentMethod: e.target.value})}
+                >
+                  <option value="PENDIENTE">A pagar (queda pendiente)</option>
+                  <option value="CONTADO">Efectivo</option>
+                  <option value="TRANSF">Transferencia</option>
+                </select>
               </div>
               <p style={{ fontSize: '12px', color: 'var(--gris-medio)', fontStyle: 'italic', marginBottom: '20px' }}>
                 El monto lo asignará el administrador más tarde.
